@@ -2,6 +2,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -260,4 +264,33 @@ body {
   padding-left: 1.25rem;
   font-size: 0.85rem;
   color: #555;
+}
+
+.status-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.status-entry {
+  font-size: 0.85rem;
+  color: #555;
+  padding: 0.4rem 0.75rem;
+  border-left: 3px solid #d1d5db;
+  background-color: #fafafa;
+}
+
+.status-entry--concluido {
+  border-left-color: #16a34a;
+  color: #15803d;
+  font-weight: 600;
+}
+
+.status-entry--erro,
+.status-entry--ocr_falhou {
+  border-left-color: #dc2626;
+  color: #b91c1c;
 }

@@ -14,6 +14,7 @@ const submitError = document.getElementById('submit-error');
 const resultsSection = document.getElementById('results');
 const resultsNotesWrapper = document.getElementById('results-notes-wrapper');
 const resultsNotesList = document.getElementById('results-notes');
+const statusTimeline = document.getElementById('status-timeline');
 
 const OCR_ENDPOINT = 'http://localhost:5000/api/ocr';
 
@@ -223,8 +224,18 @@ function renderResultsNotes(notes) {
   resultsNotesWrapper.hidden = false;
 }
 
+function appendStatusEntry(stage, message) {
+  statusTimeline.hidden = false;
+  const li = document.createElement('li');
+  li.className = `status-entry status-entry--${stage}`;
+  li.textContent = message;
+  statusTimeline.appendChild(li);
+}
+
 submitButton.addEventListener('click', async () => {
   submitError.hidden = true;
+  statusTimeline.innerHTML = '';
+  statusTimeline.hidden = true;
 
   if (files.length === 0) {
     return;
@@ -252,15 +263,38 @@ submitButton.addEventListener('click', async () => {
       method: 'POST',
       body: formData,
     });
-    const data = await response.json();
 
-    if (!response.ok) {
-      throw new Error(data.error || 'Erro desconhecido');
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue;
+        }
+        const event = JSON.parse(line);
+        appendStatusEntry(event.stage, event.message);
+
+        if (event.stage === 'concluido') {
+          resultsSection.hidden = false;
+          renderResultsTable(event.csv);
+          renderResultsNotes(event.notes);
+        } else if (event.stage === 'erro') {
+          submitError.textContent = event.message;
+          submitError.hidden = false;
+        }
+      }
     }
-
-    resultsSection.hidden = false;
-    renderResultsTable(data.csv);
-    renderResultsNotes(data.notes);
   } catch (error) {
     submitError.textContent = error.message;
     submitError.hidden = false;
