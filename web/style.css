@@ -224,9 +224,31 @@ body {
   gap: 1rem;
 }
 
-.results h2 {
+.results-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.results-header h2 {
   font-size: 1.1rem;
   margin: 0;
+}
+
+#clear-results {
+  background: none;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  color: #555;
+  cursor: pointer;
+}
+
+#clear-results:hover {
+  border-color: #b91c1c;
+  color: #b91c1c;
 }
 
 .results-table-wrapper {

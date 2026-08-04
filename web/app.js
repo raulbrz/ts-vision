@@ -15,6 +15,7 @@ const resultsSection = document.getElementById('results');
 const resultsNotesWrapper = document.getElementById('results-notes-wrapper');
 const resultsNotesList = document.getElementById('results-notes');
 const statusTimeline = document.getElementById('status-timeline');
+const clearResultsButton = document.getElementById('clear-results');
 
 const OCR_ENDPOINT = 'http://localhost:5000/api/ocr';
 
@@ -223,6 +224,18 @@ function renderResultsNotes(notes) {
   });
   resultsNotesWrapper.hidden = false;
 }
+
+function clearResults() {
+  resultsSection.hidden = true;
+  document.getElementById('results-table').innerHTML = '';
+  resultsNotesList.innerHTML = '';
+  resultsNotesWrapper.hidden = true;
+  statusTimeline.innerHTML = '';
+  statusTimeline.hidden = true;
+  submitError.hidden = true;
+}
+
+clearResultsButton.addEventListener('click', clearResults);
 
 function appendStatusEntry(stage, message) {
   statusTimeline.hidden = false;
