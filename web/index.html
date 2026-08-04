@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TS Vision — Upload de Timesheets</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <h1>TS Vision — Upload de Timesheets</h1>
+
+    <section class="upload-zone">
+      <div id="dropzone" class="upload-dropzone">
+        <p>Arraste arquivos aqui ou clique para selecionar</p>
+        <p class="upload-hint">Formatos aceitos: PDF, PNG, JPG</p>
+        <input
+          id="file-input"
+          type="file"
+          multiple
+          accept=".pdf,.png,.jpg,.jpeg"
+          class="upload-input"
+        />
+      </div>
+
+      <ul id="upload-errors" class="upload-errors" hidden></ul>
+
+      <div id="upload-list" class="upload-list" hidden>
+        <div class="upload-list-header">
+          <span id="upload-count"></span>
+          <button type="button" id="clear-all">Limpar tudo</button>
+        </div>
+        <ul id="upload-items"></ul>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
