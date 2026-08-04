@@ -32,6 +32,33 @@
         </div>
         <ul id="upload-items"></ul>
       </div>
+
+      <div class="upload-actions">
+        <div class="date-range">
+          <label>
+            Data inicial
+            <input type="date" id="date-inicio" />
+          </label>
+          <label>
+            Data final
+            <input type="date" id="date-fim" />
+          </label>
+        </div>
+        <button type="button" id="submit-button" disabled>Enviar para OCR</button>
+      </div>
+
+      <div id="submit-error" class="upload-errors" hidden></div>
+
+      <div id="results" class="results" hidden>
+        <h2>Resultado</h2>
+        <div class="results-table-wrapper">
+          <table id="results-table"></table>
+        </div>
+        <div id="results-notes-wrapper" hidden>
+          <h3>Pontos de atenção</h3>
+          <ul id="results-notes"></ul>
+        </div>
+      </div>
     </section>
   </main>
 

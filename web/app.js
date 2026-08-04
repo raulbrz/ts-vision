@@ -7,6 +7,15 @@ const uploadList = document.getElementById('upload-list');
 const uploadCount = document.getElementById('upload-count');
 const uploadItems = document.getElementById('upload-items');
 const clearAllButton = document.getElementById('clear-all');
+const submitButton = document.getElementById('submit-button');
+const dateInicioInput = document.getElementById('date-inicio');
+const dateFimInput = document.getElementById('date-fim');
+const submitError = document.getElementById('submit-error');
+const resultsSection = document.getElementById('results');
+const resultsNotesWrapper = document.getElementById('results-notes-wrapper');
+const resultsNotesList = document.getElementById('results-notes');
+
+const OCR_ENDPOINT = 'http://localhost:5000/api/ocr';
 
 let files = [];
 let nextId = 0;
@@ -65,6 +74,7 @@ function renderErrors(rejected) {
 
 function renderList() {
   uploadItems.innerHTML = '';
+  submitButton.disabled = files.length === 0;
 
   if (files.length === 0) {
     uploadList.hidden = true;
@@ -162,3 +172,100 @@ dropzone.addEventListener('drop', () => {
 });
 
 clearAllButton.addEventListener('click', clearAll);
+
+function renderResultsTable(csvText) {
+  const table = document.getElementById('results-table');
+  table.innerHTML = '';
+
+  const rows = csvText
+    .trim()
+    .split('\n')
+    .map((line) => line.split(','));
+
+  if (rows.length === 0) {
+    return;
+  }
+
+  const thead = document.createElement('thead');
+  const headerRow = document.createElement('tr');
+  rows[0].forEach((cell) => {
+    const th = document.createElement('th');
+    th.textContent = cell;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  table.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  rows.slice(1).forEach((row) => {
+    const tr = document.createElement('tr');
+    row.forEach((cell) => {
+      const td = document.createElement('td');
+      td.textContent = cell;
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+}
+
+function renderResultsNotes(notes) {
+  resultsNotesList.innerHTML = '';
+  if (!notes || notes.length === 0) {
+    resultsNotesWrapper.hidden = true;
+    return;
+  }
+  notes.forEach((note) => {
+    const li = document.createElement('li');
+    li.textContent = note;
+    resultsNotesList.appendChild(li);
+  });
+  resultsNotesWrapper.hidden = false;
+}
+
+submitButton.addEventListener('click', async () => {
+  submitError.hidden = true;
+
+  if (files.length === 0) {
+    return;
+  }
+
+  const dateInicio = dateInicioInput.value;
+  const dateFim = dateFimInput.value;
+
+  if (!dateInicio || !dateFim) {
+    submitError.textContent = 'Informe data inicial e data final.';
+    submitError.hidden = false;
+    return;
+  }
+
+  const formData = new FormData();
+  files.forEach((entry) => formData.append('files', entry.file));
+  formData.append('data_inicial', dateInicio);
+  formData.append('data_final', dateFim);
+
+  submitButton.disabled = true;
+  submitButton.textContent = 'Processando...';
+
+  try {
+    const response = await fetch(OCR_ENDPOINT, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || 'Erro desconhecido');
+    }
+
+    resultsSection.hidden = false;
+    renderResultsTable(data.csv);
+    renderResultsNotes(data.notes);
+  } catch (error) {
+    submitError.textContent = error.message;
+    submitError.hidden = false;
+  } finally {
+    submitButton.disabled = files.length === 0;
+    submitButton.textContent = 'Enviar para OCR';
+  }
+});
