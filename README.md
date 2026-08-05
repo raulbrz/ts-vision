@@ -12,6 +12,7 @@ regras de conversão do prompt em [`prompt-to-OCR`](./prompt-to-OCR).
 - `prompt-to-OCR` — prompt que define o schema do CSV e as regras de extração; usado em tempo de
   execução pelo backend, não é só documentação.
 - `docs/superpowers/` — specs e planos de implementação de cada feature.
+- `BACKLOG.md` — itens de melhoria conhecidos, em ordem de prioridade.
 
 ## Como rodar
 

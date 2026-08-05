@@ -80,7 +80,11 @@ status instead of a single opaque spinner. The generator orchestrates two indepe
    that file is skipped from the LLM step.
 2. `llm.py` — sends the raw OCR text (labeled per source filename) plus the full contents of the
    repo-root `prompt-to-OCR` prompt (with `[DATA_INICIAL]`/`[DATA_FINAL]` substituted) to an LLM via
-   OpenRouter's OpenAI-compatible chat completions endpoint. `_split_csv_and_notes` then splits the
+   OpenRouter's OpenAI-compatible chat completions endpoint, through `_post_with_retry` rather than a
+   direct `requests.post` call. `_post_with_retry` retries transient failures (HTTP 429, any 5xx, or a
+   network-level `requests.exceptions.RequestException`) up to `MAX_RETRIES` (3) times with exponential
+   backoff plus jitter, honoring a `Retry-After` response header when present; non-transient errors
+   (400/401/etc.) propagate immediately without retrying. `_split_csv_and_notes` then splits the
    model's free-text reply into the CSV block and the "pontos de atenção" list by looking for the
    model's own "Pontos de atenção" section header — this parsing is coupled to the output format
    `prompt-to-OCR` asks the model to produce, so if that prompt's `SAÍDA` section changes, this parser
@@ -100,6 +104,12 @@ Changing the CSV columns or business rules means editing this file, not the Pyth
 (brainstorming skill → design spec in `specs/`, then implementation plan in `plans/`). They're a useful
 record of *why* a given architecture was chosen (e.g. why Cloud Vision + a separate LLM call was picked
 over a single multimodal call) when extending the pipeline.
+
+**`BACKLOG.md`** (repo root) tracks known improvement items across `web/` and `server/`, ranked by
+priority (result correctness first, then usability, then code quality/perf, with production/security
+hardening deliberately deferred to last since it isn't the current focus). Check an item off (`- [ ]` →
+`- [x]`, with a short note on how it was resolved) when you fix it, and add new items there when you
+spot a real gap while working — keep it in sync with actual repo state rather than letting it drift.
 
 ## Secrets
 
