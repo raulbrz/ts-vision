@@ -44,7 +44,10 @@
             <input type="date" id="date-fim" />
           </label>
         </div>
-        <button type="button" id="submit-button" disabled>Enviar para OCR</button>
+        <div class="submit-actions">
+          <button type="button" id="submit-button" disabled>Enviar para OCR</button>
+          <button type="button" id="cancel-button" hidden>Cancelar</button>
+        </div>
       </div>
 
       <div id="submit-error" class="upload-errors" hidden></div>
@@ -54,7 +57,10 @@
       <div id="results" class="results" hidden>
         <div class="results-header">
           <h2>Resultado</h2>
-          <button type="button" id="clear-results">Limpar resultado</button>
+          <div class="results-header-actions">
+            <button type="button" id="download-csv">Baixar CSV</button>
+            <button type="button" id="clear-results">Limpar resultado</button>
+          </div>
         </div>
         <div class="results-table-wrapper">
           <table id="results-table"></table>

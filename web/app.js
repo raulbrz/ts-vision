@@ -8,6 +8,7 @@ const uploadCount = document.getElementById('upload-count');
 const uploadItems = document.getElementById('upload-items');
 const clearAllButton = document.getElementById('clear-all');
 const submitButton = document.getElementById('submit-button');
+const cancelButton = document.getElementById('cancel-button');
 const dateInicioInput = document.getElementById('date-inicio');
 const dateFimInput = document.getElementById('date-fim');
 const submitError = document.getElementById('submit-error');
@@ -16,11 +17,14 @@ const resultsNotesWrapper = document.getElementById('results-notes-wrapper');
 const resultsNotesList = document.getElementById('results-notes');
 const statusTimeline = document.getElementById('status-timeline');
 const clearResultsButton = document.getElementById('clear-results');
+const downloadCsvButton = document.getElementById('download-csv');
 
 const OCR_ENDPOINT = 'http://localhost:5000/api/ocr';
 
 let files = [];
 let nextId = 0;
+let lastCsvText = '';
+let activeController = null;
 
 function isAcceptedFileType(file) {
   const lowerName = file.name.toLowerCase();
@@ -233,9 +237,25 @@ function clearResults() {
   statusTimeline.innerHTML = '';
   statusTimeline.hidden = true;
   submitError.hidden = true;
+  lastCsvText = '';
 }
 
 clearResultsButton.addEventListener('click', clearResults);
+
+downloadCsvButton.addEventListener('click', () => {
+  if (!lastCsvText) {
+    return;
+  }
+  const blob = new Blob(['﻿' + lastCsvText], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `timesheets_${dateInicioInput.value || 'inicio'}_${dateFimInput.value || 'fim'}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+});
 
 function appendStatusEntry(stage, message) {
   statusTimeline.hidden = false;
@@ -270,11 +290,16 @@ submitButton.addEventListener('click', async () => {
 
   submitButton.disabled = true;
   submitButton.textContent = 'Processando...';
+  cancelButton.hidden = false;
+
+  const controller = new AbortController();
+  activeController = controller;
 
   try {
     const response = await fetch(OCR_ENDPOINT, {
       method: 'POST',
       body: formData,
+      signal: controller.signal,
     });
 
     const reader = response.body.getReader();
@@ -300,6 +325,7 @@ submitButton.addEventListener('click', async () => {
 
         if (event.stage === 'concluido') {
           resultsSection.hidden = false;
+          lastCsvText = event.csv;
           renderResultsTable(event.csv);
           renderResultsNotes(event.notes);
         } else if (event.stage === 'erro') {
@@ -309,10 +335,22 @@ submitButton.addEventListener('click', async () => {
       }
     }
   } catch (error) {
-    submitError.textContent = error.message;
-    submitError.hidden = false;
+    if (error.name === 'AbortError') {
+      appendStatusEntry('cancelado', 'Processamento cancelado pelo usuário.');
+    } else {
+      submitError.textContent = error.message;
+      submitError.hidden = false;
+    }
   } finally {
+    activeController = null;
+    cancelButton.hidden = true;
     submitButton.disabled = files.length === 0;
     submitButton.textContent = 'Enviar para OCR';
+  }
+});
+
+cancelButton.addEventListener('click', () => {
+  if (activeController) {
+    activeController.abort();
   }
 });

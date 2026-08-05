@@ -57,13 +57,21 @@ button POSTs a `multipart/form-data` request (files + `data_inicial`/`data_final
 response body as a stream (`response.body.getReader()` + `TextDecoder`, buffering and splitting on
 `\n`) to parse newline-delimited JSON events as they arrive rather than waiting for one final response.
 Each parsed event is appended to `#status-timeline` via `appendStatusEntry(stage, message)`; a
-`concluido` event additionally renders the results table/notes, and an `erro` event surfaces
-`submitError`. `clearResults()` (bound to `#clear-results`) resets the table, notes, timeline, and
-error banner back to their empty/hidden state without touching the selected-files list. Note:
-`[hidden]` alone doesn't hide elements whose class also sets `display` (e.g. `.results { display:
-flex }` beats the UA default `[hidden] { display: none }` at equal specificity) — `style.css` has a
-global `[hidden] { display: none !important; }` rule to force it, so any new toggleable section should
-rely on the `hidden` attribute rather than a bespoke `.is-visible`-style class.
+`concluido` event additionally renders the results table/notes and caches the raw CSV string in
+`lastCsvText`, and an `erro` event surfaces `submitError`. The in-flight request is cancellable: the
+submit handler stores its `AbortController` in `activeController` and passes `controller.signal` to
+`fetch`; `#cancel-button` (shown only while a request is running) calls `.abort()`, and the resulting
+`AbortError` is caught and rendered as a `cancelado` status-timeline entry — a client-only stage the
+server never emits, so don't look for it in `app.py`. `#download-csv` builds a `Blob` from
+`lastCsvText` (with a UTF-8 BOM so accented characters survive when opened in Excel) and triggers the
+download via a synthetic `<a download>` click, naming the file from the selected `data_inicial`/
+`data_final`. `clearResults()` (bound to `#clear-results`) resets the table, notes, timeline,
+`lastCsvText`, and error banner back to their empty/hidden state without touching the selected-files
+list. Note: `[hidden]` alone doesn't hide elements whose class also sets `display` (e.g. `.results {
+display: flex }` beats the UA default `[hidden] { display: none }` at equal specificity) —
+`style.css` has a global `[hidden] { display: none !important; }` rule to force it, so any new
+toggleable section should rely on the `hidden` attribute rather than a bespoke `.is-visible`-style
+class.
 
 **`server/`** — Flask app run as a flat script (`python app.py`), not an installed package — modules
 import each other directly (`import config`, `import ocr`, `import llm`), not via relative imports.

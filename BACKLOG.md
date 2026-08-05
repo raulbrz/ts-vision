@@ -29,10 +29,15 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
 
 ## Média prioridade — usabilidade
 
-- [ ] **Não há como exportar o CSV gerado.** O resultado só é renderizado como tabela HTML; falta um
-  botão para baixar o `.csv`.
-- [ ] **Sem `AbortController` no fetch de streaming.** Uma vez submetido, o usuário não consegue
-  cancelar um processamento em andamento.
+- [x] **Não há como exportar o CSV gerado.** O resultado só é renderizado como tabela HTML; falta um
+  botão para baixar o `.csv`. Resolvido: botão "Baixar CSV" no cabeçalho do resultado (`web/index.html`)
+  gera um `Blob` com o texto CSV recebido no evento `concluido` (guardado em `lastCsvText`,
+  `web/app.js`) e dispara o download via link temporário, nomeado com as datas inicial/final.
+- [x] **Sem `AbortController` no fetch de streaming.** Uma vez submetido, o usuário não consegue
+  cancelar um processamento em andamento. Resolvido: `activeController` guarda o `AbortController` do
+  envio atual (`web/app.js`), `#cancel-button` chama `.abort()`, e o `AbortError` resultante é
+  capturado e exibido como um evento `cancelado` na timeline (estágio só do frontend, o backend nunca
+  o emite).
 - [ ] **`OCR_ENDPOINT` hardcoded para `localhost:5000`** em `web/app.js`. Impede deploy do frontend
   sem editar o código-fonte; precisa virar configurável (variável de build, arquivo de config, etc.).
 - [ ] **Sem validação de formato das datas.** O backend só checa que `data_inicial`/`data_final` não
