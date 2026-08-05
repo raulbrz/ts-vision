@@ -29,4 +29,5 @@ python3 -m http.server 8000   # http://localhost:8000
 ```
 
 Abra `http://localhost:8000`, selecione os arquivos, informe o intervalo de datas e clique em "Enviar
-para OCR".
+para OCR". O andamento (OCR de cada arquivo, ajuste do texto pela IA, conclusão ou erro) aparece em
+tempo real na tela, e o botão "Limpar resultado" reseta a tabela para um novo envio.
