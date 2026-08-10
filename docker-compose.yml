@@ -1,0 +1,37 @@
+services:
+  server:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    env_file:
+      - ./server/.env
+    environment:
+      # Paths inside the container — override whatever server/.env has locally, so the
+      # same .env used for non-Docker dev also works here unmodified.
+      GOOGLE_APPLICATION_CREDENTIALS: /app/server/gcp-service-account.json
+      USERS_DB_PATH: /data/users.db
+    volumes:
+      - users_db:/data
+      - ./server/gcp-service-account.json:/app/server/gcp-service-account.json:ro
+    restart: unless-stopped
+    expose:
+      - "5000"
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+    container_name: ts-vision-web
+    networks:
+      - default
+      - nginx_proxy-network
+    depends_on:
+      - server
+    restart: unless-stopped
+
+volumes:
+  users_db:
+
+networks:
+  nginx_proxy-network:
+    external: true

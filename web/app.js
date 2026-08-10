@@ -29,7 +29,13 @@ const appScreen = document.getElementById('app-screen');
 const sessionUser = document.getElementById('session-user');
 const logoutButton = document.getElementById('logout-button');
 
-const API_BASE = 'http://localhost:5000/api';
+// Local dev runs frontend (:8000) and backend (:5000) as separate servers, so the API
+// stays on an explicit absolute URL there. Anywhere else (a VPS behind the docker-compose
+// nginx proxy) frontend and backend share an origin, so a relative path lets nginx route
+// /api/* to the backend container without baking a hostname into the bundle.
+const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:5000/api'
+  : '/api';
 const OCR_ENDPOINT = `${API_BASE}/ocr`;
 const LOGIN_ENDPOINT = `${API_BASE}/login`;
 const SESSION_ENDPOINT = `${API_BASE}/session`;

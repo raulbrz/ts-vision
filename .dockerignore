@@ -1,0 +1,10 @@
+.git
+.worktrees
+docs
+server/venv
+server/__pycache__
+server/.env
+server/*.json
+server/users.db
+**/__pycache__
+*.pyc

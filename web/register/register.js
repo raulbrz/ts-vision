@@ -7,7 +7,10 @@ const registerSubmit = document.getElementById('register-submit');
 const registerError = document.getElementById('register-error');
 const registerSuccess = document.getElementById('register-success');
 
-const REGISTER_ENDPOINT = 'http://localhost:5000/api/register';
+// See web/app.js for why this isn't a single hardcoded constant.
+const REGISTER_ENDPOINT = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:5000/api/register'
+  : '/api/register';
 const TOKEN_KEY = 'tsvision_token';
 const USER_KEY = 'tsvision_user';
 
