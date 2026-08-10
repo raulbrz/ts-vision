@@ -54,5 +54,24 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
 
 Não é prioridade agora, mas fica registrado para quando o app for exposto além de uso local:
 
-- [ ] `CORS(app)` está aberto para qualquer origem, sem autenticação.
+- [x] **Sem autenticação nenhuma.** Resolvido: login simples de usuário/senha na frente do site.
+  `server/auth.py` emite um token assinado com HMAC-SHA256 (`AUTH_SECRET`), `POST /api/login` e
+  `GET /api/session` no `app.py`, e `POST /api/ocr` protegido por `@auth.login_required`; o frontend
+  tem uma tela de login (`#login-screen`) e guarda o token em `localStorage`.
+- [ ] `CORS(app)` continua aberto para qualquer origem (agora com auth por token, mas sem restrição
+  de origem).
+- [x] **Sem cadastro de usuários.** Resolvido: tela `/register` (`web/register/`) + `POST /api/register`,
+  protegidos por um segredo compartilhado (`REGISTRATION_SECRET`, com fallback para `AUTH_SECRET`). Os
+  usuários ficam em `server/users.db` (SQLite, gitignorado) com senha em hash scrypt (`server/users.py`);
+  o par `APP_USERNAME`/`APP_PASSWORD` do `.env` continua valendo como conta raiz.
+- [ ] **Segredo de registro é o `AUTH_SECRET` por padrão.** A chave que assina os tokens acaba sendo
+  digitada num formulário e trafegando na rede; se vazar, dá para forjar token de qualquer usuário.
+  Definir um `REGISTRATION_SECRET` separado resolve — hoje isso é opcional, deveria ser o padrão.
+- [ ] **Sem rate limiting no `/api/login` nem no `/api/register`.** Nada limita tentativas de senha ou
+  de adivinhação do segredo de registro por IP/usuário — força bruta é só uma questão de tempo se o
+  backend for exposto publicamente.
+- [ ] **Não há como listar, remover ou trocar a senha de um usuário.** Só dá para criar; qualquer outra
+  operação exige mexer no SQLite na mão. Falta pelo menos um script de administração.
+- [ ] **Token fica em `localStorage`.** Sobrevive a XSS mal; com o app exposto, migrar para cookie
+  `httpOnly`+`SameSite` seria mais seguro.
 - [ ] `debug=True` em `app.run` (deve ser desligado fora do ambiente de desenvolvimento).

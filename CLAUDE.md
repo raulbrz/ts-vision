@@ -6,7 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ts-vision extracts data from handwritten "GOLD TIGERS SERVICES TIMESHEETS" (PDF/image scans) into a
 CSV table. A static frontend uploads files; a Python backend runs them through a two-step OCR pipeline
-and streams progress back as the pipeline runs. All UI copy and API error messages are in Portuguese.
+and streams progress back as the pipeline runs. The whole site sits behind a username/password login:
+a root account from `server/.env` plus any accounts created on `/register`, which is gated by a shared
+registration secret rather than being open to the public. All UI copy and API error messages are in
+Portuguese.
 
 ## Running it locally
 
@@ -32,9 +35,13 @@ There is no build tool, package manager lockfile, linter, or test suite in this 
 `web/` nor `server/` has one configured. Don't assume `npm test`, `pytest`, or similar will do anything.
 Verification is manual/ad hoc:
 
-- Backend request-validation and pure-function logic (e.g. `llm._split_csv_and_notes`) can be checked
-  with one-off `python3 -c "..."` snippets — see the task steps in `docs/superpowers/plans/` for the
-  pattern used so far.
+- Backend request-validation and pure-function logic (e.g. `llm._split_csv_and_notes`,
+  `users.verify_password`, `auth.verify_token`) can be checked with one-off `python3 -c "..."` snippets
+  — see the task steps in `docs/superpowers/plans/` for the pattern used so far.
+- The auth endpoints (`/api/login`, `/api/register`, `/api/session`, and the 401 on `/api/ocr`) are the
+  one part exercisable end to end for free: `curl` against a running `python app.py` covers every path,
+  since none of them reach Vision or OpenRouter. Registering test users writes to `server/users.db` —
+  delete them afterwards so the real database stays clean.
 - Frontend behavior needs a real browser; the plans directory shows how this was checked with
   `playwright-core` driving a local browser against a `python3 -m http.server` instance, since no test
   runner is wired into `web/`.
@@ -99,9 +106,63 @@ status instead of a single opaque spinner. The generator orchestrates two indepe
    likely needs to change too. The final `notes` sent to the frontend is `notes + llm_notes` — OCR
    failure messages (Python-generated) followed by the LLM's own content-quality observations.
 
-`config.py` reads `GOOGLE_APPLICATION_CREDENTIALS` / `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` from
-`server/.env` (via `python-dotenv`) and `config.validate()` is called at import time in `app.py`, so a
-missing credential fails the process at startup rather than on the first request.
+`config.py` reads `GOOGLE_APPLICATION_CREDENTIALS` / `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` plus the
+auth settings (`APP_USERNAME`, `APP_PASSWORD`, `AUTH_SECRET`, `AUTH_TOKEN_TTL_HOURS`,
+`REGISTRATION_SECRET`, `USERS_DB_PATH`) from `server/.env`
+(via `python-dotenv`) and `config.validate()` is called at import time in `app.py`, so a missing
+credential — including the login pair — fails the process at startup rather than on the first request.
+`AUTH_SECRET` is the one optional field: when absent, `config` generates a per-process random secret
+(`AUTH_SECRET_IS_EPHEMERAL` is set and `app.py` logs a warning), which means every restart, including
+`debug=True` reloads, invalidates all issued tokens.
+
+**Auth** — `server/auth.py` + `server/users.py`, no new dependency: a token is
+`base64url(payload).base64url(hmac_sha256)`, where the payload is `{"sub", "exp"}`, signed with
+`config.AUTH_SECRET` (stdlib `hmac`/`hashlib`) — not
+a JWT library, so don't reach for `pyjwt` when touching it. `verify_token` rejects bad signatures and
+expired `exp`; the `@auth.login_required` decorator reads `Authorization: Bearer <token>` and returns
+401 with a body shaped like a pipeline event (`{"stage": "erro", "message": ...}`) so the frontend
+renders something sensible even if it reads the response as an NDJSON stream. `app.py` exposes
+`POST /api/login` (JSON `{usuario, senha}` → `{token, usuario, expira_em}`), `POST /api/register`, and
+`GET /api/session` (revalidates a stored token), and decorates `POST /api/ocr` with `login_required`.
+
+There are **two credential sources**, and `auth.check_credentials` tries them in this order: the root
+pair `APP_USERNAME`/`APP_PASSWORD` from `.env` (plain text, compared with `hmac.compare_digest`), then
+`users.authenticate` against the SQLite database. The root account is deliberately *not* seeded into
+the database — it stays env-only, so changing it in `.env` takes effect on restart with no migration.
+
+`users.py` owns `server/users.db` (SQLite via stdlib `sqlite3`, gitignored, created by `users.init_db()`
+at `app.py` import time): one `users` table with `username TEXT UNIQUE COLLATE NOCASE` — hence
+duplicate checks are case-insensitive — and a `password_hash` in the format
+`scrypt$n$r$p$salt_b64$hash_b64` produced by `hashlib.scrypt` (no bcrypt/argon2 dependency).
+`users.authenticate` hashes a throwaway password when the user doesn't exist, so a missing user and a
+wrong password take the same time. `validate_new_user` enforces the username pattern (3–32 chars of
+`[A-Za-z0-9._-]`), the 8-char minimum password, and rejects the root username as taken; it raises
+`UserError` carrying the Portuguese message that `app.py` maps to 409 (name in use) or 400 (everything
+else).
+
+Registration is gated by `config.REGISTRATION_SECRET`, which defaults to `AUTH_SECRET` when unset —
+the `/register` screen tells the user to type the `AUTH_SECRET` from `.env`. Set `REGISTRATION_SECRET`
+separately to stop the token-signing key from being typed into a form. `config.REGISTRATION_ENABLED`
+is false when there is no explicit registration secret *and* `AUTH_SECRET` is ephemeral (nobody could
+know the random value), in which case `/api/register` answers 503 instead of being unguessable-but-open.
+
+On the frontend, `index.html` has two top-level screens — `#login-screen` and `#app-screen`, both
+starting `hidden` — and `app.js` toggles them: `bootstrapSession()` runs at the bottom of the file on
+load, shows the login screen when no token is stored, otherwise shows the app optimistically while
+revalidating the token against `/api/session`. The token and username live in `localStorage`
+(`tsvision_token` / `tsvision_user`); `authHeaders()` adds the `Authorization` header to the OCR fetch,
+and any 401 (on `/api/session` or `/api/ocr`) routes through `handleUnauthorized()`, which drops the
+stored token, clears files and results, and returns to the login screen. Since the frontend is served
+as static files by `python3 -m http.server`, this gate is cosmetic on its own — the real enforcement is
+the `login_required` decorator on the API.
+
+Registration is a **separate static page**, not a third screen inside `index.html`:
+`web/register/index.html` + `web/register/register.js`, reusing `../style.css`. The directory name is
+what makes the URL `/register` work under plain `python3 -m http.server` (it 301s `/register` →
+`/register/` and serves the `index.html` inside) — no router, no rewrite rules. On success the backend
+already returns a token, so `register.js` writes the same `localStorage` keys and redirects to `../`,
+landing the new user logged in. `register.js` duplicates the endpoint constant and the token key names
+rather than importing them — `web/` has no module system, so keep the two files in sync by hand.
 
 **`prompt-to-OCR`** (repo root, no file extension) is not documentation — it's live input read by
 `llm.py` on every request. It defines the exact CSV schema (`Employee,Date,entrada1,saida1,entrada2,
@@ -121,6 +182,7 @@ spot a real gap while working — keep it in sync with actual repo state rather 
 
 ## Secrets
 
-`server/.env` (real credentials) and `server/*.json` (GCP service account keys) are gitignored.
+`server/.env` (real credentials), `server/*.json` (GCP service account keys) and `server/users.db`
+(hashed passwords of registered users) are gitignored.
 `server/.env.example` must stay a placeholder template — never put real keys in it, since it isn't
 gitignored.
