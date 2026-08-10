@@ -140,6 +140,17 @@ wrong password take the same time. `validate_new_user` enforces the username pat
 `UserError` carrying the Portuguese message that `app.py` maps to 409 (name in use) or 400 (everything
 else).
 
+Both credential-guessing routes are throttled by `server/ratelimit.py` — an in-memory
+`AttemptLimiter` (dict + `threading.Lock`, so it resets on restart and counts per process, not across
+workers). `app.py` holds one instance and keys it `"login:<ip>"` / `"register:<ip>"` via `_rate_key`,
+so the two counters are independent. Only credential failures count (wrong password, wrong
+registration secret) — 400/409 validation errors don't. Each failure goes through `_penalize`, which
+sleeps `AUTH_FAILURE_DELAY_SECONDS` and, from the `AUTH_MAX_ATTEMPTS`-th failure on, blocks the IP for
+`AUTH_BLOCK_SECONDS` doubling per extra failure up to `AUTH_MAX_BLOCK_SECONDS`; a blocked request gets
+429 + `Retry-After` instead of 401/403, and any success calls `limiter.reset`. The sleep is a
+deliberate second-order defense — it ties up a worker thread, so keep it short and rely on the block
+for the real protection.
+
 Registration is gated by `config.REGISTRATION_SECRET`, which defaults to `AUTH_SECRET` when unset —
 the `/register` screen tells the user to type the `AUTH_SECRET` from `.env`. Set `REGISTRATION_SECRET`
 separately to stop the token-signing key from being typed into a form. `config.REGISTRATION_ENABLED`

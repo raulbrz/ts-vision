@@ -67,9 +67,14 @@ Não é prioridade agora, mas fica registrado para quando o app for exposto alé
 - [ ] **Segredo de registro é o `AUTH_SECRET` por padrão.** A chave que assina os tokens acaba sendo
   digitada num formulário e trafegando na rede; se vazar, dá para forjar token de qualquer usuário.
   Definir um `REGISTRATION_SECRET` separado resolve — hoje isso é opcional, deveria ser o padrão.
-- [ ] **Sem rate limiting no `/api/login` nem no `/api/register`.** Nada limita tentativas de senha ou
-  de adivinhação do segredo de registro por IP/usuário — força bruta é só uma questão de tempo se o
-  backend for exposto publicamente.
+- [x] **Sem rate limiting no `/api/login` nem no `/api/register`.** Resolvido: `server/ratelimit.py`
+  conta tentativas falhas por IP (contadores separados por rota); cada falha custa
+  `AUTH_FAILURE_DELAY_SECONDS` e, a partir da 5ª, o IP leva 429 + `Retry-After` com bloqueio de 30s
+  dobrando até 15min. Sucesso zera o contador. Falta cobrir o caso multi-worker: o estado é do
+  processo, então com vários workers cada um conta o seu — em produção precisaria de Redis ou similar.
+- [ ] **Freio de força bruta usa `request.remote_addr` direto.** Atrás de um proxy reverso isso vira o
+  IP do proxy e o bloqueio passa a valer para todo mundo de uma vez; precisa tratar `X-Forwarded-For`
+  (com lista de proxies confiáveis) quando o app for exposto.
 - [ ] **Não há como listar, remover ou trocar a senha de um usuário.** Só dá para criar; qualquer outra
   operação exige mexer no SQLite na mão. Falta pelo menos um script de administração.
 - [ ] **Token fica em `localStorage`.** Sobrevive a XSS mal; com o app exposto, migrar para cookie

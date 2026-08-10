@@ -38,6 +38,11 @@ com o Google Cloud Vision e estrutura o resultado em CSV usando um LLM via OpenR
    - `REGISTRATION_SECRET`: segredo pedido na tela `/register` para autorizar a criação de
      conta. Se vazio, vale o `AUTH_SECRET` — por isso o registro só funciona com um
      `AUTH_SECRET` fixo no `.env` (com segredo efêmero, `/api/register` responde 503).
+   - `AUTH_FAILURE_DELAY_SECONDS`, `AUTH_MAX_ATTEMPTS`, `AUTH_BLOCK_SECONDS`,
+     `AUTH_MAX_BLOCK_SECONDS`, `AUTH_ATTEMPT_WINDOW_SECONDS`: freio de força bruta das rotas
+     de login/registro (padrões: 1s de atraso por falha; a partir da 5ª falha do mesmo IP na
+     janela de 15min, bloqueio de 30s dobrando a cada falha até 15min). Um login/registro
+     bem-sucedido zera o contador daquele IP.
 
 3. Rode o servidor:
 
@@ -56,6 +61,10 @@ com o Google Cloud Vision e estrutura o resultado em CSV usando um LLM via OpenR
   devolve um token (201). 403 se o segredo não bater, 409 se o nome já existir, 400 para
   usuário/senha fora das regras (usuário: 3–32 caracteres em `[A-Za-z0-9._-]`; senha:
   mínimo 8), 503 se o registro estiver indisponível por falta de `AUTH_SECRET`.
+
+`/api/login` e `/api/register` respondem 429 com header `Retry-After` quando o IP passa do
+limite de tentativas falhas (senha errada no login, segredo errado no registro). Os dois
+contadores são independentes, e erros de validação (400/409) não contam como tentativa.
 - `GET /api/session` — revalida o token do header `Authorization: Bearer <token>`;
   devolve `{"usuario"}` ou 401.
 - `POST /api/ocr` — exige o mesmo header `Authorization`; sem token válido responde 401

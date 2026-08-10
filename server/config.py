@@ -31,6 +31,23 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 USERS_DB_PATH = os.environ.get("USERS_DB_PATH") or os.path.join(BASE_DIR, "users.db")
 
 
+def _env_number(name, default, cast=float):
+    try:
+        return cast(os.environ.get(name, default))
+    except (TypeError, ValueError):
+        return cast(default)
+
+
+# Freio de força bruta em /api/login e /api/register (ver ratelimit.py).
+# Até AUTH_MAX_ATTEMPTS falhas por IP dentro da janela só custam o atraso; a partir daí o
+# IP é bloqueado por AUTH_BLOCK_SECONDS, dobrando a cada falha até AUTH_MAX_BLOCK_SECONDS.
+AUTH_FAILURE_DELAY_SECONDS = _env_number("AUTH_FAILURE_DELAY_SECONDS", "1")
+AUTH_MAX_ATTEMPTS = _env_number("AUTH_MAX_ATTEMPTS", "5", int)
+AUTH_BLOCK_SECONDS = _env_number("AUTH_BLOCK_SECONDS", "30", int)
+AUTH_MAX_BLOCK_SECONDS = _env_number("AUTH_MAX_BLOCK_SECONDS", "900", int)
+AUTH_ATTEMPT_WINDOW_SECONDS = _env_number("AUTH_ATTEMPT_WINDOW_SECONDS", "900", int)
+
+
 def validate() -> None:
     missing = []
     if not GOOGLE_APPLICATION_CREDENTIALS:
