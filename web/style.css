@@ -496,3 +496,33 @@ body {
   border-left-color: #d97706;
   color: #b45309;
 }
+
+.status-entry--llm_retentando {
+  border-left-color: #f59e0b;
+  color: #92400e;
+  background-color: #fffbeb;
+}
+
+.status-entry-reveal {
+  margin-top: 0.35rem;
+}
+
+.status-entry-reveal summary {
+  cursor: pointer;
+  font-size: 0.78rem;
+  color: #2563eb;
+  user-select: none;
+}
+
+.status-entry-reveal pre {
+  margin: 0.5rem 0 0;
+  padding: 0.6rem 0.75rem;
+  background-color: #111827;
+  color: #e5e7eb;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+}

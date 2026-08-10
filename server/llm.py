@@ -15,9 +15,11 @@ BACKOFF_BASE_SECONDS = 1
 logger = logging.getLogger(__name__)
 
 
-def structure(
+def build_prompt(
     ocr_texts: dict, date_start: str, date_end: str, prompt_template: str
-) -> tuple:
+) -> str:
+    """Assembles the exact user message sent to the LLM, so callers can display it
+    (e.g. as a progress event) before the request actually goes out."""
     prompt = prompt_template.replace("[DATA_INICIAL]", date_start).replace(
         "[DATA_FINAL]", date_end
     )
@@ -27,22 +29,38 @@ def structure(
         for filename, text in ocr_texts.items()
     )
 
-    user_message = f"{prompt}\n\nTEXTOS EXTRAÍDOS POR OCR:\n\n{sources}"
+    return f"{prompt}\n\nTEXTOS EXTRAÍDOS POR OCR:\n\n{sources}"
 
-    response = _post_with_retry(
+
+def structure(
+    ocr_texts: dict, date_start: str, date_end: str, prompt_template: str
+):
+    """Generator: yields {"type": "retry", ...} progress events while a transient
+    OpenRouter failure is being retried, then a final
+    {"type": "result", "result": (csv_text, notes)} once the model responds."""
+    user_message = build_prompt(ocr_texts, date_start, date_end, prompt_template)
+
+    response = None
+    for progress in _post_with_retry(
         {
             "model": config.OPENROUTER_MODEL,
             "messages": [{"role": "user", "content": user_message}],
         }
-    )
-    content = response.json()["choices"][0]["message"]["content"]
+    ):
+        if progress["type"] == "retry":
+            yield progress
+        else:
+            response = progress["response"]
 
-    return _split_csv_and_notes(content)
+    content = response.json()["choices"][0]["message"]["content"]
+    yield {"type": "result", "result": _split_csv_and_notes(content)}
 
 
 def _post_with_retry(payload: dict):
     """POST to OpenRouter, retrying transient failures (429 / 5xx / network errors)
-    with exponential backoff. Non-transient errors (e.g. 400/401) raise immediately."""
+    with exponential backoff. Non-transient errors (e.g. 400/401) raise immediately.
+    Yields a {"type": "retry", ...} progress dict before each retry wait, then a
+    final {"type": "response", "response": ...} once a request succeeds."""
     last_exc = None
 
     for attempt in range(MAX_RETRIES + 1):
@@ -66,7 +84,8 @@ def _post_with_retry(payload: dict):
                 )
             else:
                 response.raise_for_status()
-                return response
+                yield {"type": "response", "response": response}
+                return
 
         if attempt == MAX_RETRIES:
             raise last_exc
@@ -79,6 +98,13 @@ def _post_with_retry(payload: dict):
             last_exc,
             delay,
         )
+        yield {
+            "type": "retry",
+            "attempt": attempt + 1,
+            "max_attempts": MAX_RETRIES + 1,
+            "delay": delay,
+            "error": str(last_exc),
+        }
         time.sleep(delay)
 
 

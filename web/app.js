@@ -278,11 +278,24 @@ downloadCsvButton.addEventListener('click', () => {
   URL.revokeObjectURL(url);
 });
 
-function appendStatusEntry(stage, message) {
+function appendStatusEntry(stage, message, revealLabel, revealContent) {
   statusTimeline.hidden = false;
   const li = document.createElement('li');
   li.className = `status-entry status-entry--${stage}`;
   li.textContent = message;
+
+  if (revealContent) {
+    const details = document.createElement('details');
+    details.className = 'status-entry-reveal';
+    const summary = document.createElement('summary');
+    summary.textContent = revealLabel;
+    const pre = document.createElement('pre');
+    pre.textContent = revealContent;
+    details.appendChild(summary);
+    details.appendChild(pre);
+    li.appendChild(details);
+  }
+
   statusTimeline.appendChild(li);
 }
 
@@ -348,7 +361,13 @@ submitButton.addEventListener('click', async () => {
           continue;
         }
         const event = JSON.parse(line);
-        appendStatusEntry(event.stage, event.message);
+        if (event.stage === 'ocr_concluido' && event.texto) {
+          appendStatusEntry(event.stage, event.message, 'Ver texto extraído pelo OCR', event.texto);
+        } else if (event.stage === 'llm_processando' && event.prompt) {
+          appendStatusEntry(event.stage, event.message, 'Ver conteúdo enviado à IA', event.prompt);
+        } else {
+          appendStatusEntry(event.stage, event.message);
+        }
 
         if (event.stage === 'concluido') {
           resultsSection.hidden = false;

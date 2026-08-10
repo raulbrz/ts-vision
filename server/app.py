@@ -185,7 +185,10 @@ def ocr_endpoint():
             try:
                 ocr_texts[filename] = ocr.extract_text(file_bytes, filename)
                 yield _event(
-                    "ocr_concluido", f"OCR de {filename} concluído.", arquivo=filename
+                    "ocr_concluido",
+                    f"OCR de {filename} concluído.",
+                    arquivo=filename,
+                    texto=ocr_texts[filename],
                 )
             except Exception as exc:
                 logger.exception("Falha no OCR de %s", filename)
@@ -196,10 +199,30 @@ def ocr_endpoint():
             yield _event("erro", "Nenhum arquivo pôde ser processado pelo OCR.")
             return
 
-        yield _event("llm_processando", "Ajustando texto extraído com IA...")
+        prompt_enviado = llm.build_prompt(
+            ocr_texts, date_start, date_end, PROMPT_TEMPLATE
+        )
+        yield _event(
+            "llm_processando",
+            "Ajustando texto extraído com IA...",
+            prompt=prompt_enviado,
+        )
 
+        csv_text = None
+        llm_notes = []
         try:
-            csv_text, llm_notes = llm.structure(ocr_texts, date_start, date_end, PROMPT_TEMPLATE)
+            for progress in llm.structure(ocr_texts, date_start, date_end, PROMPT_TEMPLATE):
+                if progress["type"] == "retry":
+                    yield _event(
+                        "llm_retentando",
+                        f"Chamada à IA falhou ({progress['error']}). Tentativa "
+                        f"{progress['attempt']}/{progress['max_attempts']}, nova tentativa em "
+                        f"{progress['delay']:.1f}s...",
+                        tentativa=progress["attempt"],
+                        max_tentativas=progress["max_attempts"],
+                    )
+                else:
+                    csv_text, llm_notes = progress["result"]
         except Exception as exc:
             logger.exception("Falha ao chamar o LLM")
             yield _event("erro", f"Falha ao processar com o LLM: {exc}")
