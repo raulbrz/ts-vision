@@ -14,6 +14,8 @@ regras de conversão do prompt em [`prompt-to-OCR`](./prompt-to-OCR).
   execução pelo backend, não é só documentação.
 - `docs/superpowers/` — specs e planos de implementação de cada feature.
 - `BACKLOG.md` — itens de melhoria conhecidos, em ordem de prioridade.
+- `docker-compose.yml`, `server/Dockerfile`, `web/Dockerfile`, `deploy/nginx.conf` — deploy em VPS via
+  Docker (ver seção [Deploy](#deploy) abaixo).
 
 ## Como rodar
 
@@ -41,3 +43,24 @@ Depois de entrar, selecione os arquivos, informe o intervalo de datas e clique e
 para OCR". O andamento (OCR de cada arquivo, ajuste do texto pela IA, conclusão ou erro) aparece em
 tempo real na tela; "Cancelar" interrompe um envio em andamento. Ao concluir, "Baixar CSV" exporta o
 resultado como arquivo `.csv` e "Limpar resultado" reseta a tabela para um novo envio.
+
+## Deploy
+
+Para rodar numa VPS via Docker: clone o repositório na máquina, preencha `server/.env` (copie de
+`server/.env.example`, mesmas credenciais do setup local) e coloque o JSON da service account do GCP
+em `server/gcp-service-account.json`. Recomendado fixar `AUTH_SECRET` no `.env` (não deixar em
+branco) — isso mantém as sessões válidas entre restarts do container e evita divergência entre
+processos do backend. Depois:
+
+```bash
+docker compose up -d --build
+```
+
+Isso sobe dois containers: `server` (Flask + gunicorn, sem porta publicada — só acessível pelo `web`)
+e `web` (nginx, configurado por `deploy/nginx.conf`, servindo `web/` e fazendo proxy de `/api/` para
+o `server`). Nenhuma porta é publicada no host: `web` entra também na rede Docker externa
+`nginx_proxy-network` (o Nginx Proxy Manager já rodando na VPS), e é lá que se cria o proxy host
+apontando pro container `ts-vision-web`, porta `80` — sem custom location, o roteamento de `/api` já
+é resolvido dentro do próprio container `web`. `server/users.db` fica num volume Docker nomeado,
+então sobrevive a `docker compose up -d --build` (rebuild + recreate); só é perdido com
+`docker compose down -v`.

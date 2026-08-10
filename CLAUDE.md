@@ -59,10 +59,15 @@ holds the DOM structure; `style.css` the styling; `app.js` holds all logic as pl
 natively because the real `<input type="file">` is stretched transparently over the whole dropzone box
 (`.upload-input` in `style.css`) — the JS only adds a cosmetic `.is-dragging` class and reacts to the
 input's `change` event, it doesn't implement drag-and-drop file capture itself. The "Enviar para OCR"
-button POSTs a `multipart/form-data` request (files + `data_inicial`/`data_final`) to
-`http://localhost:5000/api/ocr`, which is hardcoded as `OCR_ENDPOINT` in `app.js`, then reads the
-response body as a stream (`response.body.getReader()` + `TextDecoder`, buffering and splitting on
-`\n`) to parse newline-delimited JSON events as they arrive rather than waiting for one final response.
+button POSTs a `multipart/form-data` request (files + `data_inicial`/`data_final`) to `OCR_ENDPOINT`
+in `app.js`. `API_BASE` (and `register.js`'s `REGISTER_ENDPOINT`) resolve to the absolute
+`http://localhost:5000/api` only when `location.hostname` is `localhost`/`127.0.0.1` — that's the
+non-Docker local dev layout, frontend and backend on different ports. Anywhere else they resolve to
+a relative `/api`, which is what the docker-compose deployment (see below) relies on: the `web` nginx
+container proxies `/api/` to the `server` container over the compose network, so frontend and backend
+share an origin and no hostname needs to be baked in. `app.js` then reads the OCR response body as a
+stream (`response.body.getReader()` + `TextDecoder`, buffering and splitting on `\n`) to parse
+newline-delimited JSON events as they arrive rather than waiting for one final response.
 Each parsed event is appended to `#status-timeline` via `appendStatusEntry(stage, message)`; a
 `concluido` event additionally renders the results table/notes and caches the raw CSV string in
 `lastCsvText`, and an `erro` event surfaces `submitError`. The in-flight request is cancellable: the
@@ -190,6 +195,51 @@ priority (result correctness first, then usability, then code quality/perf, with
 hardening deliberately deferred to last since it isn't the current focus). Check an item off (`- [ ]` →
 `- [x]`, with a short note on how it was resolved) when you fix it, and add new items there when you
 spot a real gap while working — keep it in sync with actual repo state rather than letting it drift.
+
+## Deployment
+
+`docker-compose.yml` (repo root) is the VPS deployment path: `git clone` the repo, fill in
+`server/.env` and drop the GCP service account JSON at `server/gcp-service-account.json` (same
+credentials the non-Docker setup needs — see `server/README.md`), then `docker compose up -d --build`.
+It builds two images:
+
+- `server/Dockerfile` — `python:3.11-slim` running the Flask app under `gunicorn` (not the
+  `debug=True` dev server `python app.py` uses locally) on `--worker-class gthread --workers 1
+  --threads 8`. Workers are pinned at 1 deliberately: `config.AUTH_SECRET` falls back to a random
+  per-process value when unset in `.env`, and separate worker *processes* (unlike threads) don't
+  share that value — with `workers > 1` and no fixed `AUTH_SECRET`, a token signed by one worker
+  would fail verification on requests routed to another. Setting `AUTH_SECRET` in `server/.env` is
+  recommended for this deployment anyway, since it's also what keeps sessions alive across container
+  restarts/redeploys. The build context is the repo root (not `server/`) because the image also needs
+  the sibling `prompt-to-OCR` file at the same relative path (`../prompt-to-OCR` from `app.py`) that
+  the non-Docker layout uses.
+- `web/Dockerfile` — `nginx:alpine` serving `web/` as static files, configured by
+  `deploy/nginx.conf` to reverse-proxy `/api/` to the `server` container over the compose network
+  (`proxy_buffering off` so the NDJSON `/api/ocr` stream still arrives incrementally, long
+  `proxy_read_timeout`/`proxy_send_timeout` to cover slow OCR/LLM calls with retries). This is why
+  `web/app.js`'s `API_BASE` and `web/register/register.js`'s `REGISTER_ENDPOINT` resolve to a
+  relative `/api` outside of `localhost`/`127.0.0.1` — see the `web/` section above.
+
+Neither container publishes a port to the host. The VPS this was built for already runs an external
+Nginx Proxy Manager (NPM) container as the internet-facing edge, so `docker-compose.yml` declares
+`nginx_proxy-network` as an `external: true` network (the one NPM itself is attached to — it isn't
+created by this compose file) and only the `web` service joins it, with a pinned `container_name:
+ts-vision-web` so NPM's proxy host config has a stable name to target (Forward Hostname/IP
+`ts-vision-web`, port `80`). `server` stays off that network entirely — it's reachable only from
+`web`, over the default compose network, exactly as `deploy/nginx.conf` expects. NPM needs only one
+proxy host, no custom location for `/api`: the split between static files and the API is handled
+inside the `web` container by `deploy/nginx.conf`, not by NPM. If the VPS's NPM network has a
+different name, update the `networks:` block in `docker-compose.yml` to match — `docker network ls`
+on the VPS shows it (look for whatever network the `nginx-proxy-manager` container is attached to).
+
+`docker-compose.yml` overrides `GOOGLE_APPLICATION_CREDENTIALS` and `USERS_DB_PATH` via its
+`environment:` block (to container-internal paths) even though `server/.env` also sets/omits them —
+compose `environment:` wins over `env_file:`, so the same `.env` works locally and in Docker without
+edits. `users.db` lives in a named volume (`users_db`, mounted at `/data`) rather than a bind mount,
+since bind-mounting a not-yet-existing file path is what SQLite/Docker gets wrong (Docker creates a
+directory instead). The GCP JSON, by contrast, is bind-mounted read-only from
+`server/gcp-service-account.json` since that file must already exist before `up` (it's gitignored
+and obtained per `server/README.md`, same as local dev).
 
 ## Secrets
 
