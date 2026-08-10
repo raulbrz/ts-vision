@@ -19,7 +19,22 @@ const statusTimeline = document.getElementById('status-timeline');
 const clearResultsButton = document.getElementById('clear-results');
 const downloadCsvButton = document.getElementById('download-csv');
 
-const OCR_ENDPOINT = 'http://localhost:5000/api/ocr';
+const loginScreen = document.getElementById('login-screen');
+const loginForm = document.getElementById('login-form');
+const loginUserInput = document.getElementById('login-user');
+const loginPasswordInput = document.getElementById('login-password');
+const loginSubmit = document.getElementById('login-submit');
+const loginError = document.getElementById('login-error');
+const appScreen = document.getElementById('app-screen');
+const sessionUser = document.getElementById('session-user');
+const logoutButton = document.getElementById('logout-button');
+
+const API_BASE = 'http://localhost:5000/api';
+const OCR_ENDPOINT = `${API_BASE}/ocr`;
+const LOGIN_ENDPOINT = `${API_BASE}/login`;
+const SESSION_ENDPOINT = `${API_BASE}/session`;
+const TOKEN_KEY = 'tsvision_token';
+const USER_KEY = 'tsvision_user';
 
 let files = [];
 let nextId = 0;
@@ -298,9 +313,15 @@ submitButton.addEventListener('click', async () => {
   try {
     const response = await fetch(OCR_ENDPOINT, {
       method: 'POST',
+      headers: authHeaders(),
       body: formData,
       signal: controller.signal,
     });
+
+    if (response.status === 401) {
+      handleUnauthorized();
+      return;
+    }
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
@@ -354,3 +375,124 @@ cancelButton.addEventListener('click', () => {
     activeController.abort();
   }
 });
+
+function getToken() {
+  return localStorage.getItem(TOKEN_KEY) || '';
+}
+
+function authHeaders() {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function showLogin(message) {
+  appScreen.hidden = true;
+  loginScreen.hidden = false;
+  loginPasswordInput.value = '';
+  if (message) {
+    loginError.textContent = message;
+    loginError.hidden = false;
+  } else {
+    loginError.hidden = true;
+  }
+  loginUserInput.focus();
+}
+
+function showApp(username) {
+  loginScreen.hidden = true;
+  loginError.hidden = true;
+  appScreen.hidden = false;
+  sessionUser.textContent = username || '';
+}
+
+function handleUnauthorized() {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  clearAll();
+  clearResults();
+  showLogin('Sessão expirada ou inválida. Faça login novamente.');
+}
+
+loginForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  loginError.hidden = true;
+
+  const usuario = loginUserInput.value.trim();
+  const senha = loginPasswordInput.value;
+
+  if (!usuario || !senha) {
+    loginError.textContent = 'Informe usuário e senha.';
+    loginError.hidden = false;
+    return;
+  }
+
+  loginSubmit.disabled = true;
+  loginSubmit.textContent = 'Entrando...';
+
+  try {
+    const response = await fetch(LOGIN_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ usuario, senha }),
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      loginError.textContent = data.message || 'Não foi possível entrar.';
+      loginError.hidden = false;
+      loginPasswordInput.value = '';
+      return;
+    }
+
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, data.usuario);
+    loginPasswordInput.value = '';
+    showApp(data.usuario);
+  } catch (error) {
+    loginError.textContent = `Não foi possível falar com o servidor: ${error.message}`;
+    loginError.hidden = false;
+  } finally {
+    loginSubmit.disabled = false;
+    loginSubmit.textContent = 'Entrar';
+  }
+});
+
+logoutButton.addEventListener('click', () => {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  if (activeController) {
+    activeController.abort();
+  }
+  clearAll();
+  clearResults();
+  showLogin();
+});
+
+async function bootstrapSession() {
+  if (!getToken()) {
+    showLogin();
+    return;
+  }
+
+  // Otimista: mostra o app enquanto o token guardado é revalidado no servidor.
+  showApp(localStorage.getItem(USER_KEY) || '');
+
+  try {
+    const response = await fetch(SESSION_ENDPOINT, { headers: authHeaders() });
+    if (response.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+    if (response.ok) {
+      const data = await response.json().catch(() => ({}));
+      if (data.usuario) {
+        localStorage.setItem(USER_KEY, data.usuario);
+        sessionUser.textContent = data.usuario;
+      }
+    }
+  } catch (error) {
+    // Servidor fora do ar: mantém a tela do app; o envio mostrará o erro de rede.
+  }
+}
+
+bootstrapSession();

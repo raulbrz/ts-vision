@@ -7,8 +7,32 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <main class="app">
-    <h1>TS Vision — Upload de Timesheets</h1>
+  <section id="login-screen" class="login-screen" hidden>
+    <form id="login-form" class="login-card">
+      <h1>TS Vision</h1>
+      <p class="login-hint">Entre com seu usuário e senha para acessar.</p>
+      <label>
+        Usuário
+        <input id="login-user" type="text" autocomplete="username" required />
+      </label>
+      <label>
+        Senha
+        <input id="login-password" type="password" autocomplete="current-password" required />
+      </label>
+      <button type="submit" id="login-submit">Entrar</button>
+      <p id="login-error" class="login-error" hidden></p>
+      <a class="login-link" href="register/">Criar conta</a>
+    </form>
+  </section>
+
+  <main id="app-screen" class="app" hidden>
+    <header class="app-header">
+      <h1>TS Vision — Upload de Timesheets</h1>
+      <div class="session-info">
+        <span id="session-user"></span>
+        <button type="button" id="logout-button">Sair</button>
+      </div>
+    </header>
 
     <section class="upload-zone">
       <div id="dropzone" class="upload-dropzone">

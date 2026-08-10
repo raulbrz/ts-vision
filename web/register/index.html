@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TS Vision — Criar conta</title>
+  <link rel="stylesheet" href="../style.css" />
+</head>
+<body>
+  <section class="login-screen">
+    <form id="register-form" class="login-card">
+      <h1>Criar conta</h1>
+      <p class="login-hint">Só quem tem o segredo de registro do servidor pode criar uma conta.</p>
+      <label>
+        Usuário
+        <input id="register-user" type="text" autocomplete="username" required />
+        <span class="field-hint">3 a 32 caracteres: letras, números, <code>. - _</code></span>
+      </label>
+      <label>
+        Senha
+        <input id="register-password" type="password" autocomplete="new-password" required />
+        <span class="field-hint">Mínimo de 8 caracteres.</span>
+      </label>
+      <label>
+        Confirmar senha
+        <input id="register-password-confirm" type="password" autocomplete="new-password" required />
+      </label>
+      <label>
+        Segredo de registro
+        <input id="register-secret" type="password" autocomplete="off" required />
+        <span class="field-hint">O <code>AUTH_SECRET</code> definido em <code>server/.env</code>.</span>
+      </label>
+      <button type="submit" id="register-submit">Criar conta</button>
+      <p id="register-error" class="login-error" hidden></p>
+      <p id="register-success" class="login-success" hidden></p>
+      <a class="login-link" href="../">Voltar para o login</a>
+    </form>
+  </section>
+
+  <script src="register.js"></script>
+</body>
+</html>
