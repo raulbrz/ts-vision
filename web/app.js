@@ -359,6 +359,19 @@ submitButton.addEventListener('click', async () => {
       return;
     }
 
+    if (!response.ok) {
+      const bodyText = await response.text();
+      let message = `Erro ${response.status} ao enviar os arquivos.`;
+      try {
+        message = JSON.parse(bodyText).message || message;
+      } catch (parseError) {
+        // Resposta não é NDJSON (ex.: página de erro do proxy) — usa a mensagem genérica.
+      }
+      submitError.textContent = message;
+      submitError.hidden = false;
+      return;
+    }
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
