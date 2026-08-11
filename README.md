@@ -42,7 +42,8 @@ usuário e da senha novos, a tela pede o segredo de registro do servidor (o `AUT
 Depois de entrar, selecione os arquivos, informe o intervalo de datas e clique em "Enviar
 para OCR". O andamento (preparo de cada arquivo, análise pela IA, conclusão ou erro) aparece em
 tempo real na tela; "Cancelar" interrompe um envio em andamento. Ao concluir, "Baixar CSV" exporta o
-resultado como arquivo `.csv` e "Limpar resultado" reseta a tabela para um novo envio.
+resultado como arquivo `.csv`, "Copiar CSV" copia o mesmo conteúdo para a área de transferência e
+"Limpar resultado" reseta a tabela para um novo envio.
 
 ## Deploy
 

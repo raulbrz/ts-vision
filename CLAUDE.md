@@ -81,9 +81,12 @@ submit handler stores its `AbortController` in `activeController` and passes `co
 server never emits, so don't look for it in `app.py`. `#download-csv` builds a `Blob` from
 `lastCsvText` (with a UTF-8 BOM so accented characters survive when opened in Excel) and triggers the
 download via a synthetic `<a download>` click, naming the file from the selected `data_inicial`/
-`data_final`. `clearResults()` (bound to `#clear-results`) resets the table, notes, timeline,
-`lastCsvText`, and error banner back to their empty/hidden state without touching the selected-files
-list. Note: `[hidden]` alone doesn't hide elements whose class also sets `display` (e.g. `.results {
+`data_final`. `#copy-csv` copies `lastCsvText` straight to the clipboard via
+`navigator.clipboard.writeText`, showing "Copiado!"/"Erro ao copiar" on the button label for 2s as
+feedback instead of a separate status element. `clearResults()` (bound to `#clear-results`) resets the
+table, notes, timeline, `lastCsvText`, and error banner back to their empty/hidden state without
+touching the selected-files list. Note: `[hidden]` alone doesn't hide elements whose class also sets
+`display` (e.g. `.results {
 display: flex }` beats the UA default `[hidden] { display: none }` at equal specificity) —
 `style.css` has a global `[hidden] { display: none !important; }` rule to force it, so any new
 toggleable section should rely on the `hidden` attribute rather than a bespoke `.is-visible`-style
