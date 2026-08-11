@@ -16,35 +16,53 @@ logger = logging.getLogger(__name__)
 
 
 def build_prompt(
-    ocr_texts: dict, date_start: str, date_end: str, prompt_template: str
+    attachments: dict, date_start: str, date_end: str, prompt_template: str
 ) -> str:
-    """Assembles the exact user message sent to the LLM, so callers can display it
-    (e.g. as a progress event) before the request actually goes out."""
+    """Text-only preview of what gets sent to the LLM (instructions + attachment
+    summary), so callers can display it (e.g. as a progress event) without embedding
+    image data."""
     prompt = prompt_template.replace("[DATA_INICIAL]", date_start).replace(
         "[DATA_FINAL]", date_end
     )
 
-    sources = "\n\n".join(
-        f"--- Texto extraído de {filename} ---\n{text}"
-        for filename, text in ocr_texts.items()
+    summary = "\n".join(
+        f"- {filename} ({len(parts)} página(s))"
+        for filename, parts in attachments.items()
     )
 
-    return f"{prompt}\n\nTEXTOS EXTRAÍDOS POR OCR:\n\n{sources}"
+    return f"{prompt}\n\nARQUIVOS ANEXADOS:\n\n{summary}"
+
+
+def build_messages(
+    attachments: dict, date_start: str, date_end: str, prompt_template: str
+) -> list:
+    """Assembles the actual multimodal `messages` payload sent to OpenRouter: the
+    prompt instructions followed by each file's label and image parts."""
+    prompt = prompt_template.replace("[DATA_INICIAL]", date_start).replace(
+        "[DATA_FINAL]", date_end
+    )
+
+    content = [{"type": "text", "text": prompt}]
+    for filename, parts in attachments.items():
+        content.append({"type": "text", "text": f"--- Arquivo: {filename} ---"})
+        content.extend(parts)
+
+    return [{"role": "user", "content": content}]
 
 
 def structure(
-    ocr_texts: dict, date_start: str, date_end: str, prompt_template: str
+    attachments: dict, date_start: str, date_end: str, prompt_template: str
 ):
     """Generator: yields {"type": "retry", ...} progress events while a transient
     OpenRouter failure is being retried, then a final
     {"type": "result", "result": (csv_text, notes)} once the model responds."""
-    user_message = build_prompt(ocr_texts, date_start, date_end, prompt_template)
+    messages = build_messages(attachments, date_start, date_end, prompt_template)
 
     response = None
     for progress in _post_with_retry(
         {
             "model": config.OPENROUTER_MODEL,
-            "messages": [{"role": "user", "content": user_message}],
+            "messages": messages,
         }
     ):
         if progress["type"] == "retry":
