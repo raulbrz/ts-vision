@@ -204,7 +204,7 @@ def ocr_endpoint():
         )
         yield _event(
             "llm_processando",
-            "Analisando timesheets com IA...",
+            f"Analisando timesheets com IA ({config.OPENROUTER_MODEL})...",
             prompt=prompt_enviado,
         )
 
