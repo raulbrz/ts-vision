@@ -6,10 +6,10 @@ import time
 from flask import Flask, Response, jsonify, request, stream_with_context
 from flask_cors import CORS
 
+import attachments
 import auth
 import config
 import llm
-import ocr
 import ratelimit
 import users
 
@@ -175,43 +175,43 @@ def ocr_endpoint():
     file_records = [(fs.filename, fs.read()) for fs in files]
 
     def generate():
-        yield _event("recebido", "Arquivos recebidos, iniciando OCR...")
+        yield _event("recebido", "Arquivos recebidos, preparando envio à IA...")
 
-        ocr_texts = {}
+        file_attachments = {}
         notes = []
 
         for filename, file_bytes in file_records:
-            yield _event("ocr_lendo", f"Lendo {filename} com OCR...", arquivo=filename)
+            yield _event("preparando", f"Preparando {filename} para envio à IA...", arquivo=filename)
             try:
-                ocr_texts[filename] = ocr.extract_text(file_bytes, filename)
+                parts = attachments.to_image_parts(file_bytes, filename)
+                file_attachments[filename] = parts
                 yield _event(
-                    "ocr_concluido",
-                    f"OCR de {filename} concluído.",
+                    "preparado",
+                    f"{filename} pronto ({len(parts)} página(s)).",
                     arquivo=filename,
-                    texto=ocr_texts[filename],
                 )
             except Exception as exc:
-                logger.exception("Falha no OCR de %s", filename)
-                notes.append(f"{filename}: falha no OCR ({exc})")
-                yield _event("ocr_falhou", f"Falha no OCR de {filename}.", arquivo=filename)
+                logger.exception("Falha ao preparar %s", filename)
+                notes.append(f"{filename}: falha ao preparar arquivo ({exc})")
+                yield _event("preparo_falhou", f"Falha ao preparar {filename}.", arquivo=filename)
 
-        if not ocr_texts:
-            yield _event("erro", "Nenhum arquivo pôde ser processado pelo OCR.")
+        if not file_attachments:
+            yield _event("erro", "Nenhum arquivo pôde ser preparado para envio à IA.")
             return
 
         prompt_enviado = llm.build_prompt(
-            ocr_texts, date_start, date_end, PROMPT_TEMPLATE
+            file_attachments, date_start, date_end, PROMPT_TEMPLATE
         )
         yield _event(
             "llm_processando",
-            "Ajustando texto extraído com IA...",
+            "Analisando timesheets com IA...",
             prompt=prompt_enviado,
         )
 
         csv_text = None
         llm_notes = []
         try:
-            for progress in llm.structure(ocr_texts, date_start, date_end, PROMPT_TEMPLATE):
+            for progress in llm.structure(file_attachments, date_start, date_end, PROMPT_TEMPLATE):
                 if progress["type"] == "retry":
                     yield _event(
                         "llm_retentando",
