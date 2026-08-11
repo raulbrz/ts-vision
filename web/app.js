@@ -18,6 +18,7 @@ const resultsNotesList = document.getElementById('results-notes');
 const statusTimeline = document.getElementById('status-timeline');
 const clearResultsButton = document.getElementById('clear-results');
 const downloadCsvButton = document.getElementById('download-csv');
+const copyCsvButton = document.getElementById('copy-csv');
 
 const loginScreen = document.getElementById('login-screen');
 const loginForm = document.getElementById('login-form');
@@ -276,6 +277,22 @@ downloadCsvButton.addEventListener('click', () => {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+});
+
+copyCsvButton.addEventListener('click', async () => {
+  if (!lastCsvText) {
+    return;
+  }
+  const originalLabel = copyCsvButton.textContent;
+  try {
+    await navigator.clipboard.writeText(lastCsvText);
+    copyCsvButton.textContent = 'Copiado!';
+  } catch (error) {
+    copyCsvButton.textContent = 'Erro ao copiar';
+  }
+  setTimeout(() => {
+    copyCsvButton.textContent = originalLabel;
+  }, 2000);
 });
 
 function appendStatusEntry(stage, message, revealLabel, revealContent) {

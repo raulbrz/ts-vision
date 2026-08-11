@@ -406,6 +406,7 @@ body {
 }
 
 #download-csv,
+#copy-csv,
 #clear-results {
   background: none;
   border: 1px solid #e5e5e5;
@@ -416,7 +417,8 @@ body {
   cursor: pointer;
 }
 
-#download-csv:hover {
+#download-csv:hover,
+#copy-csv:hover {
   border-color: #15803d;
   color: #15803d;
 }
