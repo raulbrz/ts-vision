@@ -7,10 +7,10 @@ Segurança/produção foi propositalmente deixada por último — não é o foco
 
 Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito da ferramenta.
 
-- [ ] **PDFs com mais de 5 páginas são truncados silenciosamente.** `ocr.py` usa
-  `batch_annotate_files` (API síncrona do Vision), que processa no máximo 5 páginas por arquivo. Hoje
-  o restante é descartado sem log nem aviso ao usuário. Precisa detectar o caso e reportar (evento
-  `ocr_falhou` parcial, ou nota avisando que só as N primeiras páginas foram lidas).
+- [x] **PDFs com mais de 5 páginas são truncados silenciosamente.** Resolvido por construção: o
+  pipeline trocou o Cloud Vision (API síncrona limitada a 5 páginas por arquivo) por um LLM
+  multimodal via OpenRouter, com `attachments.py` renderizando todas as páginas do PDF via PyMuPDF
+  sem limite algum.
 - [ ] **Parsing de CSV no frontend é frágil.** `renderResultsTable` (`web/app.js`) faz
   `line.split(',')` — quebra se algum campo tiver vírgula (nome com vírgula, campo entre aspas).
   Trocar por um parser de CSV mínimo que respeite aspas.
@@ -25,7 +25,7 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
   transitórios (400/401/etc.) continuam propagando imediatamente.
 - [ ] **Sem validação de tipo/tamanho real de arquivo no backend.** O filtro de extensão
   (`.pdf/.png/.jpg/.jpeg`) só existe no frontend; um arquivo malformado ou renomeado chega ao
-  `ocr.extract_text` e derruba com uma exceção genérica.
+  `attachments.to_image_parts` e derruba com uma exceção genérica.
 
 ## Média prioridade — usabilidade
 
@@ -47,8 +47,10 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
 
 - [ ] **Sem testes automatizados.** `_split_csv_and_notes` é uma função pura e crítica (acopla o
   parsing ao formato de saída do `prompt-to-OCR`) — é a candidata mais valiosa para testes unitários.
-- [ ] **OCR processado sequencialmente.** O loop em `app.py` processa um arquivo por vez; para envios
-  com muitos arquivos, paralelizar as chamadas ao Vision reduziria o tempo total.
+- [x] **OCR processado sequencialmente.** Deixou de ser um gargalo: o preparo de cada arquivo
+  (`attachments.to_image_parts`) é local (renderização de PDF via PyMuPDF, sem chamada de rede) e o
+  processamento em si virou uma única chamada ao LLM para todos os arquivos, não mais uma chamada de
+  OCR por arquivo.
 
 ## Adiado — produção/segurança
 

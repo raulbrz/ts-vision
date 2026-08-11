@@ -1,7 +1,8 @@
 # ts-vision backend
 
-Backend Python que recebe os arquivos enviados pela interface em `web/`, extrai texto
-com o Google Cloud Vision e estrutura o resultado em CSV usando um LLM via OpenRouter.
+Backend Python que recebe os arquivos enviados pela interface em `web/` e, numa única
+chamada, manda as imagens direto para um LLM multimodal via OpenRouter, que já devolve o
+CSV estruturado.
 
 ## Setup
 
@@ -20,13 +21,11 @@ com o Google Cloud Vision e estrutura o resultado em CSV usando um LLM via OpenR
    cp .env.example .env
    ```
 
-   - `GOOGLE_APPLICATION_CREDENTIALS`: caminho para o JSON de uma service account do
-     Google Cloud com a API **Cloud Vision** habilitada no projeto
-     (console.cloud.google.com → APIs & Services → Library → Cloud Vision API → Enable;
-     depois IAM & Admin → Service Accounts → Create → Keys → Create key → JSON).
    - `OPENROUTER_API_KEY`: chave gerada em openrouter.ai/keys.
-   - `OPENROUTER_MODEL`: modelo a usar (padrão `openai/gpt-4o-mini`; qualquer modelo
-     listado em openrouter.ai/models funciona, desde que suporte instruções longas).
+   - `OPENROUTER_MODEL`: modelo a usar (padrão `google/gemma-4-26b-a4b-it:free`). Precisa
+     ser um modelo com suporte a **entrada multimodal (imagem)** listado em
+     openrouter.ai/models — o backend manda as páginas da timesheet como imagens, não
+     como texto.
    - `APP_USERNAME` / `APP_PASSWORD`: a conta raiz do site, em texto puro no `.env` (que é
      gitignorado). Contas adicionais são criadas na tela `/register` e ficam no SQLite
      `server/users.db` (também gitignorado), com senha em hash scrypt.
@@ -68,4 +67,4 @@ contadores são independentes, e erros de validação (400/409) não contam como
 - `GET /api/session` — revalida o token do header `Authorization: Bearer <token>`;
   devolve `{"usuario"}` ou 401.
 - `POST /api/ocr` — exige o mesmo header `Authorization`; sem token válido responde 401
-  antes de tocar em Vision/OpenRouter.
+  antes de tocar no OpenRouter.

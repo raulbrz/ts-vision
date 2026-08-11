@@ -6,13 +6,11 @@ services:
     env_file:
       - ./server/.env
     environment:
-      # Paths inside the container — override whatever server/.env has locally, so the
+      # Path inside the container — overrides whatever server/.env has locally, so the
       # same .env used for non-Docker dev also works here unmodified.
-      GOOGLE_APPLICATION_CREDENTIALS: /app/server/gcp-service-account.json
       USERS_DB_PATH: /data/users.db
     volumes:
       - users_db:/data
-      - ./server/gcp-service-account.json:/app/server/gcp-service-account.json:ro
     restart: unless-stopped
     expose:
       - "5000"

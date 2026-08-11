@@ -5,8 +5,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What this is
 
 ts-vision extracts data from handwritten "GOLD TIGERS SERVICES TIMESHEETS" (PDF/image scans) into a
-CSV table. A static frontend uploads files; a Python backend runs them through a two-step OCR pipeline
-and streams progress back as the pipeline runs. The whole site sits behind a username/password login:
+CSV table. A static frontend uploads files; a Python backend sends them, as images, to a multimodal LLM
+in a single call and streams progress back as the pipeline runs. The whole site sits behind a
+username/password login:
 a root account from `server/.env` plus any accounts created on `/register`, which is gated by a shared
 registration secret rather than being open to the public. All UI copy and API error messages are in
 Portuguese.
@@ -28,8 +29,8 @@ cd web
 python3 -m http.server 8000
 ```
 
-`server/README.md` has the steps for obtaining the two required credentials (a GCP service account
-JSON with the Cloud Vision API enabled, and an OpenRouter API key).
+`server/README.md` has the steps for obtaining the one required credential (an OpenRouter API key —
+`OPENROUTER_MODEL` must point at a model with multimodal/image input support).
 
 There is no build tool, package manager lockfile, linter, or test suite in this repository — neither
 `web/` nor `server/` has one configured. Don't assume `npm test`, `pytest`, or similar will do anything.
@@ -40,13 +41,16 @@ Verification is manual/ad hoc:
   — see the task steps in `docs/superpowers/plans/` for the pattern used so far.
 - The auth endpoints (`/api/login`, `/api/register`, `/api/session`, and the 401 on `/api/ocr`) are the
   one part exercisable end to end for free: `curl` against a running `python app.py` covers every path,
-  since none of them reach Vision or OpenRouter. Registering test users writes to `server/users.db` —
-  delete them afterwards so the real database stays clean.
+  since none of them reach OpenRouter. Registering test users writes to `server/users.db` — delete them
+  afterwards so the real database stays clean. The `/api/ocr` streaming stages up through
+  `preparando`/`preparado`/`preparo_falhou` are also exercisable with a fake `OPENROUTER_API_KEY` and a
+  real image/PDF fixture — only the final OpenRouter call itself needs a live key.
 - Frontend behavior needs a real browser; the plans directory shows how this was checked with
   `playwright-core` driving a local browser against a `python3 -m http.server` instance, since no test
   runner is wired into `web/`.
-- The Cloud Vision and OpenRouter calls need live credentials and cost money per call — they aren't
-  exercised by any automated check, only by manually running both servers and using the UI.
+- The OpenRouter multimodal call needs a live credential and costs money per call (and has to be a
+  vision-capable model) — it isn't exercised by any automated check, only by manually running both
+  servers and using the UI.
 
 ## Architecture
 
@@ -86,36 +90,47 @@ toggleable section should rely on the `hidden` attribute rather than a bespoke `
 class.
 
 **`server/`** — Flask app run as a flat script (`python app.py`), not an installed package — modules
-import each other directly (`import config`, `import ocr`, `import llm`), not via relative imports.
-`app.py` is the only HTTP surface (`POST /api/ocr`). Instead of returning one JSON response, it streams
-newline-delimited JSON (`application/x-ndjson`, via `Response(stream_with_context(generate()), ...)`):
-each `_event(stage, message, **extra)` call yields one line as the pipeline progresses through
-`recebido` → per-file `ocr_lendo`/`ocr_concluido`/`ocr_falhou` → `llm_processando` → a terminal
-`concluido` (carrying `csv` and `notes`) or `erro` event. This lets the frontend show live per-file
-status instead of a single opaque spinner. The generator orchestrates two independent, swappable steps:
+import each other directly (`import config`, `import attachments`, `import llm`), not via relative
+imports. `app.py` is the only HTTP surface (`POST /api/ocr`). Instead of returning one JSON response,
+it streams newline-delimited JSON (`application/x-ndjson`, via
+`Response(stream_with_context(generate()), ...)`): each `_event(stage, message, **extra)` call yields
+one line as the pipeline progresses through `recebido` → per-file `preparando`/`preparado`/
+`preparo_falhou` → `llm_processando` → a terminal `concluido` (carrying `csv` and `notes`) or `erro`
+event. This lets the frontend show live per-file status instead of a single opaque spinner. There used
+to be a separate Google Cloud Vision OCR step before the LLM call; it was removed because Vision's
+`full_text_annotation.text` flattens the page into reading-order text and throws away the row/column
+layout, which then had to be blindly reconstructed by the LLM from a linear string — a bad fit for a
+handwritten grid. A vision-capable LLM reading the actual image handles that layout natively, so OCR
+and structuring collapsed into one step:
 
-1. `ocr.py` — Google Cloud Vision `document_text_detection` (images) / `batch_annotate_files` (PDF,
-   capped at 5 pages by Vision's sync API) turns each uploaded file into raw text. One file's OCR
-   failure doesn't fail the request — it's recorded as an `ocr_falhou` event and a `notes` entry, and
-   that file is skipped from the LLM step.
-2. `llm.py` — sends the raw OCR text (labeled per source filename) plus the full contents of the
-   repo-root `prompt-to-OCR` prompt (with `[DATA_INICIAL]`/`[DATA_FINAL]` substituted) to an LLM via
-   OpenRouter's OpenAI-compatible chat completions endpoint, through `_post_with_retry` rather than a
-   direct `requests.post` call. `_post_with_retry` retries transient failures (HTTP 429, any 5xx, or a
+1. `attachments.py` — turns each uploaded file into a list of OpenAI/OpenRouter-style `image_url`
+   content parts: PDFs are rendered page-by-page to PNG via PyMuPDF (`to_image_parts`, no page cap,
+   no system Poppler dependency needed), plain image files pass through as base64 of the original
+   bytes with a mime type derived from the extension. One file's conversion failure (corrupt PDF,
+   unreadable bytes) doesn't fail the request — it's recorded as a `preparo_falhou` event and a
+   `notes` entry, and that file is skipped from the LLM call.
+2. `llm.py` — sends one multimodal chat message to OpenRouter: `build_messages` assembles a `content`
+   array with the full `prompt-to-OCR` prompt text (with `[DATA_INICIAL]`/`[DATA_FINAL]` substituted)
+   followed by, per file, a `--- Arquivo: <name> ---` text label and that file's image parts from
+   `attachments.py`. `build_prompt` builds a text-only preview of the same instructions (filenames +
+   page counts, no image data) used for the `llm_processando` progress event, since embedding base64
+   blobs in a UI reveal panel isn't useful. The actual POST goes through `_post_with_retry` rather than
+   a direct `requests.post` call, which retries transient failures (HTTP 429, any 5xx, or a
    network-level `requests.exceptions.RequestException`) up to `MAX_RETRIES` (3) times with exponential
    backoff plus jitter, honoring a `Retry-After` response header when present; non-transient errors
    (400/401/etc.) propagate immediately without retrying. `_split_csv_and_notes` then splits the
    model's free-text reply into the CSV block and the "pontos de atenção" list by looking for the
    model's own "Pontos de atenção" section header — this parsing is coupled to the output format
    `prompt-to-OCR` asks the model to produce, so if that prompt's `SAÍDA` section changes, this parser
-   likely needs to change too. The final `notes` sent to the frontend is `notes + llm_notes` — OCR
-   failure messages (Python-generated) followed by the LLM's own content-quality observations.
+   likely needs to change too. The final `notes` sent to the frontend is `notes + llm_notes` —
+   file-preparation failure messages (Python-generated) followed by the LLM's own content-quality
+   observations.
 
-`config.py` reads `GOOGLE_APPLICATION_CREDENTIALS` / `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` plus the
-auth settings (`APP_USERNAME`, `APP_PASSWORD`, `AUTH_SECRET`, `AUTH_TOKEN_TTL_HOURS`,
-`REGISTRATION_SECRET`, `USERS_DB_PATH`) from `server/.env`
-(via `python-dotenv`) and `config.validate()` is called at import time in `app.py`, so a missing
-credential — including the login pair — fails the process at startup rather than on the first request.
+`config.py` reads `OPENROUTER_API_KEY` / `OPENROUTER_MODEL` (default `google/gemma-4-26b-a4b-it:free`
+— must be a vision-capable model) plus the auth settings (`APP_USERNAME`, `APP_PASSWORD`,
+`AUTH_SECRET`, `AUTH_TOKEN_TTL_HOURS`, `REGISTRATION_SECRET`, `USERS_DB_PATH`) from `server/.env` (via
+`python-dotenv`) and `config.validate()` is called at import time in `app.py`, so a missing credential
+— including the login pair — fails the process at startup rather than on the first request.
 `AUTH_SECRET` is the one optional field: when absent, `config` generates a per-process random secret
 (`AUTH_SECRET_IS_EPHEMERAL` is set and `app.py` logs a warning), which means every restart, including
 `debug=True` reloads, invalidates all issued tokens.
@@ -187,8 +202,9 @@ Changing the CSV columns or business rules means editing this file, not the Pyth
 
 **`docs/superpowers/`** holds the spec → plan documents this project's features were built from
 (brainstorming skill → design spec in `specs/`, then implementation plan in `plans/`). They're a useful
-record of *why* a given architecture was chosen (e.g. why Cloud Vision + a separate LLM call was picked
-over a single multimodal call) when extending the pipeline.
+record of *why* a given architecture was chosen — e.g. `2026-08-03-ocr-pipeline-design.md` records the
+original Cloud Vision + separate LLM call design, and `2026-08-11-multimodal-ocr-design.md` records why
+it was later replaced with a single multimodal call — when extending the pipeline.
 
 **`BACKLOG.md`** (repo root) tracks known improvement items across `web/` and `server/`, ranked by
 priority (result correctness first, then usability, then code quality/perf, with production/security
@@ -199,9 +215,8 @@ spot a real gap while working — keep it in sync with actual repo state rather 
 ## Deployment
 
 `docker-compose.yml` (repo root) is the VPS deployment path: `git clone` the repo, fill in
-`server/.env` and drop the GCP service account JSON at `server/gcp-service-account.json` (same
-credentials the non-Docker setup needs — see `server/README.md`), then `docker compose up -d --build`.
-It builds two images:
+`server/.env` (same credential the non-Docker setup needs — see `server/README.md`), then
+`docker compose up -d --build`. It builds two images:
 
 - `server/Dockerfile` — `python:3.11-slim` running the Flask app under `gunicorn` (not the
   `debug=True` dev server `python app.py` uses locally) on `--worker-class gthread --workers 1
@@ -216,7 +231,7 @@ It builds two images:
 - `web/Dockerfile` — `nginx:alpine` serving `web/` as static files, configured by
   `deploy/nginx.conf` to reverse-proxy `/api/` to the `server` container over the compose network
   (`proxy_buffering off` so the NDJSON `/api/ocr` stream still arrives incrementally, long
-  `proxy_read_timeout`/`proxy_send_timeout` to cover slow OCR/LLM calls with retries). This is why
+  `proxy_read_timeout`/`proxy_send_timeout` to cover a slow LLM call with retries). This is why
   `web/app.js`'s `API_BASE` and `web/register/register.js`'s `REGISTER_ENDPOINT` resolve to a
   relative `/api` outside of `localhost`/`127.0.0.1` — see the `web/` section above.
 
@@ -232,18 +247,16 @@ inside the `web` container by `deploy/nginx.conf`, not by NPM. If the VPS's NPM 
 different name, update the `networks:` block in `docker-compose.yml` to match — `docker network ls`
 on the VPS shows it (look for whatever network the `nginx-proxy-manager` container is attached to).
 
-`docker-compose.yml` overrides `GOOGLE_APPLICATION_CREDENTIALS` and `USERS_DB_PATH` via its
-`environment:` block (to container-internal paths) even though `server/.env` also sets/omits them —
-compose `environment:` wins over `env_file:`, so the same `.env` works locally and in Docker without
-edits. `users.db` lives in a named volume (`users_db`, mounted at `/data`) rather than a bind mount,
-since bind-mounting a not-yet-existing file path is what SQLite/Docker gets wrong (Docker creates a
-directory instead). The GCP JSON, by contrast, is bind-mounted read-only from
-`server/gcp-service-account.json` since that file must already exist before `up` (it's gitignored
-and obtained per `server/README.md`, same as local dev).
+`docker-compose.yml` overrides `USERS_DB_PATH` via its `environment:` block (to a container-internal
+path) even though `server/.env` also sets/omits it — compose `environment:` wins over `env_file:`, so
+the same `.env` works locally and in Docker without edits. `users.db` lives in a named volume
+(`users_db`, mounted at `/data`) rather than a bind mount, since bind-mounting a not-yet-existing file
+path is what SQLite/Docker gets wrong (Docker creates a directory instead). There's no credential file
+to bind-mount anymore — `OPENROUTER_API_KEY` is the only secret, and it travels via `env_file:` like
+everything else in `server/.env`.
 
 ## Secrets
 
-`server/.env` (real credentials), `server/*.json` (GCP service account keys) and `server/users.db`
-(hashed passwords of registered users) are gitignored.
-`server/.env.example` must stay a placeholder template — never put real keys in it, since it isn't
-gitignored.
+`server/.env` (real credentials) and `server/users.db` (hashed passwords of registered users) are
+gitignored. `server/.env.example` must stay a placeholder template — never put real keys in it, since
+it isn't gitignored.

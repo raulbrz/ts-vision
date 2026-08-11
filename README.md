@@ -1,15 +1,15 @@
 # ts-vision
 
 Extrai dados de folhas de ponto manuscritas ("GOLD TIGERS SERVICES TIMESHEETS", em PDF ou imagem) para
-uma tabela CSV, usando OCR (Google Cloud Vision) seguido de um LLM (via OpenRouter) que aplica as
-regras de conversão do prompt em [`prompt-to-OCR`](./prompt-to-OCR).
+uma tabela CSV, mandando as imagens direto para um LLM multimodal (via OpenRouter) que já aplica as
+regras de conversão do prompt em [`prompt-to-OCR`](./prompt-to-OCR) e devolve o CSV estruturado.
 
 ## Estrutura
 
 - `web/` — interface de upload (HTML/CSS/JS puro, sem build); `web/register/` é a tela de criação de
   conta, servida como `/register`.
-- `server/` — backend Python (Flask) que orquestra OCR + LLM. Veja [`server/README.md`](./server/README.md)
-  para configurar as credenciais (Google Cloud Vision e OpenRouter).
+- `server/` — backend Python (Flask) que chama o LLM multimodal via OpenRouter. Veja
+  [`server/README.md`](./server/README.md) para configurar a credencial (OpenRouter).
 - `prompt-to-OCR` — prompt que define o schema do CSV e as regras de extração; usado em tempo de
   execução pelo backend, não é só documentação.
 - `docs/superpowers/` — specs e planos de implementação de cada feature.
@@ -40,17 +40,17 @@ usuário e da senha novos, a tela pede o segredo de registro do servidor (o `AUT
 `server/users.db` com a senha em hash scrypt.
 
 Depois de entrar, selecione os arquivos, informe o intervalo de datas e clique em "Enviar
-para OCR". O andamento (OCR de cada arquivo, ajuste do texto pela IA, conclusão ou erro) aparece em
+para OCR". O andamento (preparo de cada arquivo, análise pela IA, conclusão ou erro) aparece em
 tempo real na tela; "Cancelar" interrompe um envio em andamento. Ao concluir, "Baixar CSV" exporta o
 resultado como arquivo `.csv` e "Limpar resultado" reseta a tabela para um novo envio.
 
 ## Deploy
 
-Para rodar numa VPS via Docker: clone o repositório na máquina, preencha `server/.env` (copie de
-`server/.env.example`, mesmas credenciais do setup local) e coloque o JSON da service account do GCP
-em `server/gcp-service-account.json`. Recomendado fixar `AUTH_SECRET` no `.env` (não deixar em
-branco) — isso mantém as sessões válidas entre restarts do container e evita divergência entre
-processos do backend. Depois:
+Para rodar numa VPS via Docker: clone o repositório na máquina e preencha `server/.env` (copie de
+`server/.env.example`, mesma credencial do setup local — só `OPENROUTER_API_KEY`/`OPENROUTER_MODEL`
+e as variáveis de auth, nenhum arquivo de credencial adicional). Recomendado fixar `AUTH_SECRET` no
+`.env` (não deixar em branco) — isso mantém as sessões válidas entre restarts do container e evita
+divergência entre processos do backend. Depois:
 
 ```bash
 docker compose up -d --build
