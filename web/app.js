@@ -361,9 +361,7 @@ submitButton.addEventListener('click', async () => {
           continue;
         }
         const event = JSON.parse(line);
-        if (event.stage === 'ocr_concluido' && event.texto) {
-          appendStatusEntry(event.stage, event.message, 'Ver texto extraído pelo OCR', event.texto);
-        } else if (event.stage === 'llm_processando' && event.prompt) {
+        if (event.stage === 'llm_processando' && event.prompt) {
           appendStatusEntry(event.stage, event.message, 'Ver conteúdo enviado à IA', event.prompt);
         } else {
           appendStatusEntry(event.stage, event.message);
