@@ -31,5 +31,6 @@ REGRAS DE CONVERSÃO E FORMATO:
 
 SAÍDA:
 1. Primeiro, o CSV completo (sem comentários dentro do CSV).
-2. Depois, uma lista curta de "pontos de atenção": campos ilegíveis, datas 
+2. O nome do Employee é EXTREMAMENTE importante. Retorne algum texto, nem que sejam as poucas letras legiveis, mas nunca "Unknown" ou algo similar.
+3. Depois, uma lista curta de "pontos de atenção": campos ilegíveis, datas 
    ambíguas, ou inconsistências que exigem confirmação humana.
