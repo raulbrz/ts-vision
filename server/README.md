@@ -25,7 +25,13 @@ CSV estruturado.
    - `OPENROUTER_MODEL`: modelo a usar (padrão `google/gemma-4-26b-a4b-it:free`). Precisa
      ser um modelo com suporte a **entrada multimodal (imagem)** listado em
      openrouter.ai/models — o backend manda as páginas da timesheet como imagens, não
-     como texto.
+     como texto. O backend manda todas as páginas de todos os arquivos numa única
+     requisição (sem teto de páginas/tamanho), então um PDF grande (dezenas de páginas)
+     pode gerar um payload grande demais para modelos gratuitos/pequenos — já aconteceu em
+     produção com o modelo padrão acima (erro opaco do backend do modelo, não deste
+     código). Se isso ocorrer, troque para um modelo pago com contexto maior (ex.:
+     `google/gemini-2.5-flash-lite`) — ver `BACKLOG.md` para a mitigação por lotes, caso um
+     modelo gratuito precise ser usado de novo.
    - `APP_USERNAME` / `APP_PASSWORD`: a conta raiz do site, em texto puro no `.env` (que é
      gitignorado). Contas adicionais são criadas na tela `/register` e ficam no SQLite
      `server/users.db` (também gitignorado), com senha em hash scrypt.

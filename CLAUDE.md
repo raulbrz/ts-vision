@@ -111,7 +111,15 @@ and structuring collapsed into one step:
    no system Poppler dependency needed), plain image files pass through as base64 of the original
    bytes with a mime type derived from the extension. One file's conversion failure (corrupt PDF,
    unreadable bytes) doesn't fail the request — it's recorded as a `preparo_falhou` event and a
-   `notes` entry, and that file is skipped from the LLM call.
+   `notes` entry, and that file is skipped from the LLM call. No cap on page count or PNG size also
+   means no cap on how big the eventual OpenRouter request gets — `llm.py` still sends every page of
+   every file as one multimodal request (see below). A ~18-page/10MB scanned PDF hit this in
+   production against the free `google/gemma-4-26b-a4b-it:free` (the `config.py` default): the
+   model's backend rejected the request with an opaque, non-retryable error (`"Error in input
+   stream"`, not generated anywhere in this codebase). Switching `OPENROUTER_MODEL` to a paid,
+   larger-context model (`google/gemini-2.5-flash-lite` in production) resolved it with no code
+   change; see `BACKLOG.md` for the page-batching mitigation designed for if a free/small model needs
+   to be used again.
 2. `llm.py` — sends one multimodal chat message to OpenRouter: `build_messages` assembles a `content`
    array with the full `prompt-to-OCR` prompt text (with `[DATA_INICIAL]`/`[DATA_FINAL]` substituted)
    followed by, per file, one `--- Arquivo: <name> | Página <n> ---` text label per image part from

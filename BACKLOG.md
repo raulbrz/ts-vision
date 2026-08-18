@@ -11,6 +11,18 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
   pipeline trocou o Cloud Vision (API síncrona limitada a 5 páginas por arquivo) por um LLM
   multimodal via OpenRouter, com `attachments.py` renderizando todas as páginas do PDF via PyMuPDF
   sem limite algum.
+- [ ] **Uploads de PDFs grandes podem estourar o payload da chamada ao LLM.** `attachments.py`
+  renderiza todas as páginas em PNG a 200 DPI sem nenhum teto de tamanho/páginas, e `llm.py` manda
+  todas numa única requisição a OpenRouter. Com um modelo pequeno/gratuito (ex.:
+  `google/gemma-4-26b-a4b-it:free`, o default do `config.py`), um PDF de ~18 páginas/10MB já falhou em
+  produção (2026-08-18) com um erro opaco do backend do modelo (`"Error in input stream"` — confirmado
+  não existir em nenhum código deste repo nem em suas dependências, então vem de fora). Contornado
+  trocando `OPENROUTER_MODEL` em produção para `google/gemini-2.5-flash-lite` (pago, contexto maior),
+  sem mudança de código. Se o problema voltar (modelo gratuito, ou um PDF ainda maior), a mitigação já
+  desenhada e testada é dividir as páginas em lotes menores por chamada ao LLM
+  (`_flatten_attachments` + chunking em `llm.structure`, mesclando CSV e notas das várias respostas ao
+  final, preservando o número de página original de cada imagem) — não está implementada no repo hoje,
+  foi descartada quando a troca de modelo já resolveu o caso concreto.
 - [ ] **Parsing de CSV no frontend é frágil.** `renderResultsTable` (`web/app.js`) faz
   `line.split(',')` — quebra se algum campo tiver vírgula (nome com vírgula, campo entre aspas).
   Trocar por um parser de CSV mínimo que respeite aspas.
