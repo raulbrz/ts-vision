@@ -7,9 +7,13 @@ com colunas Date | Position | START | Lunch | Finish | FINISH | Total.
 
 TAREFA:
 Extraia os dados de TODAS as páginas anexadas e retorne em formato CSV com as colunas:
-Employee,Date,entrada1,saida1,entrada2,saida2
+Page,Employee,Date,entrada1,saida1,entrada2,saida2
 
 Onde:
+- Page = número da página, dentro do arquivo de origem, de onde a linha foi extraída
+  (contagem a partir de 1). Cada imagem anexada é precedida por um marcador
+  "--- Arquivo: <nome> | Página <n> ---" indicando esse número; use exatamente o
+  valor desse marcador. Se o arquivo anexado for uma imagem única (não um PDF), use 1.
 - entrada1 = coluna START
 - saida1 = coluna Lunch
 - entrada2 = coluna Finish

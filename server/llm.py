@@ -44,8 +44,14 @@ def build_messages(
 
     content = [{"type": "text", "text": prompt}]
     for filename, parts in attachments.items():
-        content.append({"type": "text", "text": f"--- Arquivo: {filename} ---"})
-        content.extend(parts)
+        for page_number, part in enumerate(parts, start=1):
+            content.append(
+                {
+                    "type": "text",
+                    "text": f"--- Arquivo: {filename} | Página {page_number} ---",
+                }
+            )
+            content.append(part)
 
     return [{"role": "user", "content": content}]
 

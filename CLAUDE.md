@@ -114,8 +114,12 @@ and structuring collapsed into one step:
    `notes` entry, and that file is skipped from the LLM call.
 2. `llm.py` — sends one multimodal chat message to OpenRouter: `build_messages` assembles a `content`
    array with the full `prompt-to-OCR` prompt text (with `[DATA_INICIAL]`/`[DATA_FINAL]` substituted)
-   followed by, per file, a `--- Arquivo: <name> ---` text label and that file's image parts from
-   `attachments.py`. `build_prompt` builds a text-only preview of the same instructions (filenames +
+   followed by, per file, one `--- Arquivo: <name> | Página <n> ---` text label per image part from
+   `attachments.py` (`<n>` starts at 1 within that file — a plain image file has exactly one part, so
+   it's always labeled Página 1) immediately followed by that image part. `prompt-to-OCR` instructs the
+   model to echo this exact page number into the `Page` column of the CSV it returns, which is how a
+   multi-page PDF upload ends up with a page number the frontend can display per row rather than the
+   model having to infer one on its own. `build_prompt` builds a text-only preview of the same instructions (filenames +
    page counts, no image data) used for the `llm_processando` progress event, since embedding base64
    blobs in a UI reveal panel isn't useful. The actual POST goes through `_post_with_retry` rather than
    a direct `requests.post` call, which retries transient failures (HTTP 429, any 5xx, or a
@@ -199,8 +203,9 @@ landing the new user logged in. `register.js` duplicates the endpoint constant a
 rather than importing them — `web/` has no module system, so keep the two files in sync by hand.
 
 **`prompt-to-OCR`** (repo root, no file extension) is not documentation — it's live input read by
-`llm.py` on every request. It defines the exact CSV schema (`Employee,Date,entrada1,saida1,entrada2,
-saida2`), the AM/PM inference rule for timesheet punches, and the idem/illegible-field conventions.
+`llm.py` on every request. It defines the exact CSV schema (`Page,Employee,Date,entrada1,saida1,
+entrada2,saida2`), the AM/PM inference rule for timesheet punches, and the idem/illegible-field
+conventions.
 Changing the CSV columns or business rules means editing this file, not the Python code.
 
 **`docs/superpowers/`** holds the spec → plan documents this project's features were built from
