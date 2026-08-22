@@ -199,6 +199,20 @@ dropzone.addEventListener('drop', () => {
   dropzone.classList.remove('is-dragging');
 });
 
+document.addEventListener('paste', (event) => {
+  if (appScreen.hidden || !event.clipboardData) {
+    return;
+  }
+  const pastedFiles = Array.from(event.clipboardData.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter(Boolean);
+  if (pastedFiles.length > 0) {
+    event.preventDefault();
+    addFiles(pastedFiles);
+  }
+});
+
 clearAllButton.addEventListener('click', clearAll);
 
 function renderResultsTable(csvText) {

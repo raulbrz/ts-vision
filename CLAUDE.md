@@ -62,7 +62,13 @@ holds the DOM structure; `style.css` the styling; `app.js` holds all logic as pl
 (no modules) operating on an in-memory `files` array. Clicking or dropping onto the dropzone works
 natively because the real `<input type="file">` is stretched transparently over the whole dropzone box
 (`.upload-input` in `style.css`) — the JS only adds a cosmetic `.is-dragging` class and reacts to the
-input's `change` event, it doesn't implement drag-and-drop file capture itself. The "Enviar para OCR"
+input's `change` event, it doesn't implement drag-and-drop file capture itself. A third way to add files
+is pasting (Ctrl+V) — a `document`-level `paste` listener reads `event.clipboardData.items`, filters for
+`kind === 'file'` (e.g. a screenshot copied to the clipboard), and feeds the resulting `File` objects
+into the same `addFiles()` used by the input and drop paths; it's a no-op (and doesn't call
+`preventDefault`) when the clipboard payload has no files, so pasting text into the date fields or
+login form is unaffected, and it's gated on `appScreen` being visible so paste doesn't fire from the
+login screen. The "Enviar para OCR"
 button POSTs a `multipart/form-data` request (files + `data_inicial`/`data_final`) to `OCR_ENDPOINT`
 in `app.js`. `API_BASE` (and `register.js`'s `REGISTER_ENDPOINT`) resolve to the absolute
 `http://localhost:5000/api` only when `location.hostname` is `localhost`/`127.0.0.1` — that's the
