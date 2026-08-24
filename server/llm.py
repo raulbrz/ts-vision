@@ -6,6 +6,7 @@ import time
 import requests
 
 import config
+import runtime_settings
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -67,7 +68,7 @@ def structure(
     response = None
     for progress in _post_with_retry(
         {
-            "model": config.OPENROUTER_MODEL,
+            "model": runtime_settings.get_active_model(),
             "messages": messages,
         }
     ):

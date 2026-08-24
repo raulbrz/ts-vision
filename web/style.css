@@ -181,6 +181,37 @@ body {
   gap: 1rem;
 }
 
+.model-select {
+  max-width: 640px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #444;
+}
+
+.model-select-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.model-select select {
+  flex: 1;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.model-select-status {
+  color: #15803d;
+}
+
+.model-select-status.is-error {
+  color: #b91c1c;
+}
+
 .upload-dropzone {
   position: relative;
   border: 2px dashed #b3b3b3;

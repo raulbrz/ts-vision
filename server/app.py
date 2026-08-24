@@ -11,10 +11,12 @@ import auth
 import config
 import llm
 import ratelimit
+import runtime_settings
 import users
 
 config.validate()
 users.init_db()
+runtime_settings.init_db()
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROMPT_PATH = os.path.join(BASE_DIR, "..", "prompt-to-OCR")
@@ -158,6 +160,30 @@ def session_endpoint():
     return jsonify({"usuario": username})
 
 
+@app.route("/api/settings/model", methods=["GET"])
+@auth.login_required
+def get_model_setting():
+    return jsonify(
+        {
+            "model": runtime_settings.get_active_model(),
+            "options": config.OPENROUTER_MODEL_OPTIONS,
+        }
+    )
+
+
+@app.route("/api/settings/model", methods=["POST"])
+@auth.login_required
+def set_model_setting():
+    data = request.get_json(silent=True) or {}
+    model = data.get("model") or ""
+    try:
+        saved_model = runtime_settings.set_active_model(model)
+    except runtime_settings.SettingsError as exc:
+        return jsonify({"message": str(exc)}), 400
+    logger.info("Modelo da OpenRouter alterado para %r por %s", saved_model, auth.verify_token(auth.bearer_token()))
+    return jsonify({"model": saved_model})
+
+
 @app.route("/api/ocr", methods=["POST"])
 @auth.login_required
 def ocr_endpoint():
@@ -204,7 +230,7 @@ def ocr_endpoint():
         )
         yield _event(
             "llm_processando",
-            f"Analisando timesheets com IA ({config.OPENROUTER_MODEL})...",
+            f"Analisando timesheets com IA ({runtime_settings.get_active_model()})...",
             prompt=prompt_enviado,
         )
 

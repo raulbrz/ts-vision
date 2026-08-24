@@ -30,6 +30,9 @@ const appScreen = document.getElementById('app-screen');
 const sessionUser = document.getElementById('session-user');
 const logoutButton = document.getElementById('logout-button');
 
+const modelSelect = document.getElementById('model-select-input');
+const modelStatus = document.getElementById('model-select-status');
+
 // Local dev runs frontend (:8000) and backend (:5000) as separate servers, so the API
 // stays on an explicit absolute URL there. Anywhere else (a VPS behind the docker-compose
 // nginx proxy) frontend and backend share an origin, so a relative path lets nginx route
@@ -40,6 +43,7 @@ const API_BASE = (location.hostname === 'localhost' || location.hostname === '12
 const OCR_ENDPOINT = `${API_BASE}/ocr`;
 const LOGIN_ENDPOINT = `${API_BASE}/login`;
 const SESSION_ENDPOINT = `${API_BASE}/session`;
+const MODEL_SETTINGS_ENDPOINT = `${API_BASE}/settings/model`;
 const TOKEN_KEY = 'tsvision_token';
 const USER_KEY = 'tsvision_user';
 
@@ -470,6 +474,75 @@ function showApp(username) {
   loginError.hidden = true;
   appScreen.hidden = false;
   sessionUser.textContent = username || '';
+  loadModelSetting();
+}
+
+async function loadModelSetting() {
+  try {
+    const response = await fetch(MODEL_SETTINGS_ENDPOINT, { headers: authHeaders() });
+    if (response.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+    if (!response.ok) {
+      return;
+    }
+    const data = await response.json();
+    populateModelSelect(data.options || [], data.model || '');
+  } catch (error) {
+    // Servidor fora do ar: deixa o seletor como está, o envio mostrará o erro de rede.
+  }
+}
+
+function populateModelSelect(options, currentModel) {
+  // Garante que o modelo atualmente ativo apareça na lista mesmo se não estiver
+  // entre as opções sugeridas (ex.: valor herdado do .env ou definido via API).
+  const allOptions = options.includes(currentModel) ? options : [currentModel, ...options];
+
+  modelSelect.innerHTML = '';
+  allOptions.forEach((model) => {
+    const option = document.createElement('option');
+    option.value = model;
+    option.textContent = model;
+    modelSelect.appendChild(option);
+  });
+
+  modelSelect.value = currentModel;
+}
+
+modelSelect.addEventListener('change', () => {
+  applyModel(modelSelect.value);
+});
+
+async function applyModel(model) {
+  try {
+    const response = await fetch(MODEL_SETTINGS_ENDPOINT, {
+      method: 'POST',
+      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model }),
+    });
+    if (response.status === 401) {
+      handleUnauthorized();
+      return;
+    }
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      showModelStatus(data.message || 'Não foi possível atualizar o modelo.', true);
+      return;
+    }
+    showModelStatus('Modelo atualizado.', false);
+  } catch (error) {
+    showModelStatus(`Erro: ${error.message}`, true);
+  }
+}
+
+function showModelStatus(message, isError) {
+  modelStatus.textContent = message;
+  modelStatus.hidden = false;
+  modelStatus.classList.toggle('is-error', isError);
+  setTimeout(() => {
+    modelStatus.hidden = true;
+  }, 2500);
 }
 
 function handleUnauthorized() {

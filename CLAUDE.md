@@ -98,6 +98,20 @@ display: flex }` beats the UA default `[hidden] { display: none }` at equal spec
 toggleable section should rely on the `hidden` attribute rather than a bespoke `.is-visible`-style
 class.
 
+The app screen also has a "Modelo de IA" `<select>` (`#model-select-input`, above the upload zone)
+that lets a logged-in user switch which OpenRouter model handles OCR without editing `server/.env` —
+the original way, which required a redeploy. `showApp()` calls `loadModelSetting()` on login/bootstrap,
+which does a `GET` to `MODEL_SETTINGS_ENDPOINT` (`/api/settings/model`) and hands the response
+(`{model, options}`) to `populateModelSelect()`, which fills the `<select>` from `options` and selects
+`model` — adding it as an extra option first if it isn't already in `options` (e.g. it came from
+`.env` or was set previously via the API), so the dropdown never ends up unable to represent the
+server's actual state. There's no "outro/custom" free-text entry in the UI by design — only the
+curated list from `config.OPENROUTER_MODEL_OPTIONS` is selectable. Picking an option fires the
+`select`'s `change` listener straight into `applyModel()`, which `POST`s `{model}` to the same
+endpoint and shows a 2.5s inline confirmation/error via `showModelStatus()` (`#model-select-status`),
+following the same transient-feedback pattern as `#copy-csv`. A 401 from either call routes through
+`handleUnauthorized()` like every other authenticated fetch in this file.
+
 **`server/`** — Flask app run as a flat script (`python app.py`), not an installed package — modules
 import each other directly (`import config`, `import attachments`, `import llm`), not via relative
 imports. `app.py` is the only HTTP surface (`POST /api/ocr`). Instead of returning one JSON response,
@@ -154,7 +168,30 @@ and structuring collapsed into one step:
 — including the login pair — fails the process at startup rather than on the first request.
 `AUTH_SECRET` is the one optional field: when absent, `config` generates a per-process random secret
 (`AUTH_SECRET_IS_EPHEMERAL` is set and `app.py` logs a warning), which means every restart, including
-`debug=True` reloads, invalidates all issued tokens.
+`debug=True` reloads, invalidates all issued tokens. `config.OPENROUTER_MODEL_OPTIONS` is a curated,
+deduplicated list (current `OPENROUTER_MODEL` first, then a handful of known vision-capable slugs)
+that only feeds the model `<select>` on the frontend — it is not an allowlist enforced anywhere.
+
+**`server/runtime_settings.py`** holds the one setting that's meant to change without an `.env` edit
+and a redeploy: which OpenRouter model actually handles OCR. `get_active_model()`/`set_active_model()`
+read/write a `key`/`value` row (`app_settings` table, key `"openrouter_model"`) in the same SQLite file
+as `users.db` (`config.USERS_DB_PATH`) — reusing that file, rather than a new one, means the setting
+rides along on the same Docker named volume (`users_db`) that already persists `users.db` across
+container restarts/redeploys, with no compose changes needed. `get_active_model()` falls back to
+`config.OPENROUTER_MODEL` (the `.env` value) when no row exists yet. `set_active_model()` validates
+against `MODEL_PATTERN` — a permissive `provedor/modelo` shape (letters/digits/`.`/`_`/`:`/`-` either
+side of one slash, ≤200 chars) — and raises `SettingsError` (→ 400) on a bad value; unlike the
+frontend's curated `<select>`, this validation is intentionally not restricted to
+`config.OPENROUTER_MODEL_OPTIONS`, so the API stays usable for a model not yet added to that list
+(e.g. via `curl`) without a code change. `app.py` calls `runtime_settings.init_db()` at import time,
+same pattern as `users.init_db()`. `llm.structure()` reads `runtime_settings.get_active_model()` per
+request (not `config.OPENROUTER_MODEL` directly) when building the OpenRouter payload, so a change
+takes effect on the very next OCR call with no restart; the `llm_processando` progress event's message
+in `app.py` reads the same live value so what the UI displays matches what was actually sent.
+`GET /api/settings/model` (→ `{model, options}`) and `POST /api/settings/model` (body `{model}` →
+`{model}` or 400) in `app.py` are both behind `@auth.login_required` like every other authenticated
+route — there's no extra role check, so any logged-in user (root or registered) can change the model
+for everyone, consistent with this app having no per-user permission tiers anywhere else.
 
 **Auth** — `server/auth.py` + `server/users.py`, no new dependency: a token is
 `base64url(payload).base64url(hmac_sha256)`, where the payload is `{"sub", "exp"}`, signed with

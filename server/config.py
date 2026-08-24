@@ -8,6 +8,23 @@ load_dotenv()
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-26b-a4b-it:free")
 
+# Opções do seletor de modelo na tela (todos multimodais/com suporte a imagem). A UI só deixa
+# escolher um destes; a API (/api/settings/model) aceita qualquer string no formato
+# "provedor/modelo" — não é uma allowlist, só a lista do <select>.
+OPENROUTER_MODEL_OPTIONS = list(
+    dict.fromkeys(
+        [
+            OPENROUTER_MODEL,
+            "inclusionai/ling-3.0-flash:free",
+            "deepseek/deepseek-v4-flash-0731",
+            "qwen/qwen3.7-flash",
+            "google/gemma-4-26b-a4b-it:free",
+            "google/gemma-4-26b-a4b-it",
+            "google/gemini-2.5-flash-lite",
+        ]
+    )
+)
+
 APP_USERNAME = os.environ.get("APP_USERNAME")
 APP_PASSWORD = os.environ.get("APP_PASSWORD")
 
