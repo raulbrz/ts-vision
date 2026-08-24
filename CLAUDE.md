@@ -314,6 +314,21 @@ path is what SQLite/Docker gets wrong (Docker creates a directory instead). Ther
 to bind-mount anymore — `OPENROUTER_API_KEY` is the only secret, and it travels via `env_file:` like
 everything else in `server/.env`.
 
+The public domain for this deployment (`ts.rbservice.online`) is proxied through Cloudflare in front
+of NPM, and Cloudflare caches static file extensions (`.js`, `.css`, …) at the edge by default —
+observed as `cache-control: max-age=14400` (4h) on `app.js`, independent of whatever the `web`
+container's nginx serves. This means redeploying `web` (even with `--no-cache`) does **not** make
+browsers pick up the new `app.js`/`style.css`/`index.html` immediately: Cloudflare keeps serving the
+pre-deploy edge copy (`cf-cache-status: HIT`) until that 4h TTL lapses, and neither a browser hard
+refresh nor a fresh container fixes it, since the request never reaches the origin. `curl -sI
+https://ts.rbservice.online/app.js` showing `cf-cache-status: HIT` plus a `last-modified` older than
+the deploy confirms this rather than a bad build (check `docker compose exec web wc -c
+/usr/share/nginx/html/app.js` against the repo's actual byte count to rule that out first). Fastest
+fix after any `web`-affecting deploy: Cloudflare dashboard → Caching → Configuration → **Purge
+Cache** (Purge Everything, or a custom purge of the specific static files) — or just wait out the
+remaining TTL (`max-age` minus the `age` header value from that same `curl`), since it self-resolves
+with no action once the edge entry expires.
+
 ## Secrets
 
 `server/.env` (real credentials) and `server/users.db` (hashed passwords of registered users) are

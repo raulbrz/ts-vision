@@ -63,6 +63,13 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
   (`attachments.to_image_parts`) é local (renderização de PDF via PyMuPDF, sem chamada de rede) e o
   processamento em si virou uma única chamada ao LLM para todos os arquivos, não mais uma chamada de
   OCR por arquivo.
+- [ ] **Sem cache-busting nos arquivos estáticos do `web/`.** `app.js`/`style.css`/`index.html` são
+  referenciados sem hash/versão no nome. Em produção, atrás do Cloudflare, isso significa até 4h
+  (`cache-control: max-age=14400` observado) de cache no edge que sobrevive a um redeploy do container
+  `web` inteiro — confirmado em 2026-08-24 (`cf-cache-status: HIT` com `last-modified` anterior ao
+  deploy), só resolvido com "Purge Cache" manual no Cloudflare (ver `CLAUDE.md` § Deployment). Fix
+  duradouro: nome de arquivo com hash de conteúdo ou querystring versionada (ex.: `app.js?v=<git-sha>`)
+  atualizada a cada deploy, ou uma Cache Rule no Cloudflare tratando esses arquivos como no-cache.
 
 ## Adiado — produção/segurança
 
