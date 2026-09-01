@@ -12,7 +12,8 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
   multimodal via OpenRouter, com `attachments.py` renderizando todas as páginas do PDF via PyMuPDF
   sem limite algum.
 - [ ] **Uploads de PDFs grandes podem estourar o payload da chamada ao LLM.** `attachments.py`
-  renderiza todas as páginas em PNG a 200 DPI sem nenhum teto de tamanho/páginas, e `llm.py` manda
+  renderiza todas as páginas em PNG a 150 DPI (era 200; baixado para reduzir tokens de visão e
+  latência) sem nenhum teto de tamanho/páginas, e `llm.py` manda
   todas numa única requisição a OpenRouter. Com um modelo pequeno/gratuito (ex.:
   `google/gemma-4-26b-a4b-it:free`, o default do `config.py`), um PDF de ~18 páginas/10MB já falhou em
   produção (2026-08-18) com um erro opaco do backend do modelo (`"Error in input stream"` — confirmado

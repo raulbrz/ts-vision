@@ -1,3 +1,4 @@
+import json
 import logging
 import queue
 import random
@@ -68,11 +69,21 @@ def structure(
     OpenRouter failure is being retried, then a final
     {"type": "result", "result": (csv_text, notes)} once the model responds."""
     messages = build_messages(attachments, date_start, date_end, prompt_template)
+    model = runtime_settings.get_active_model()
+
+    pages = sum(len(parts) for parts in attachments.values())
+    payload_mb = len(json.dumps(messages).encode("utf-8")) / 1_000_000
+    logger.info(
+        "OpenRouter %s: enviando %d página(s), payload ~%.1f MB",
+        model,
+        pages,
+        payload_mb,
+    )
 
     response = None
     for progress in _post_with_retry(
         {
-            "model": runtime_settings.get_active_model(),
+            "model": model,
             "messages": messages,
         }
     ):
@@ -133,8 +144,11 @@ def _post_with_retry(payload: dict):
     Yields a {"type": "retry", ...} progress dict before each retry wait, then a
     final {"type": "response", "response": ...} once a request succeeds."""
     last_exc = None
+    model = payload.get("model", "?")
+    call_start = time.monotonic()
 
     for attempt in range(MAX_RETRIES + 1):
+        attempt_start = time.monotonic()
         try:
             response = requests.post(
                 OPENROUTER_URL,
@@ -147,7 +161,21 @@ def _post_with_retry(payload: dict):
             )
         except requests.exceptions.RequestException as exc:
             last_exc = exc
+            logger.info(
+                "OpenRouter %s: tentativa %d falhou em %.1fs (%s)",
+                model,
+                attempt + 1,
+                time.monotonic() - attempt_start,
+                exc,
+            )
         else:
+            logger.info(
+                "OpenRouter %s: tentativa %d -> HTTP %d em %.1fs",
+                model,
+                attempt + 1,
+                response.status_code,
+                time.monotonic() - attempt_start,
+            )
             if response.status_code == 429 or response.status_code >= 500:
                 last_exc = requests.exceptions.HTTPError(
                     f"{response.status_code} {response.reason} da OpenRouter",
@@ -155,10 +183,23 @@ def _post_with_retry(payload: dict):
                 )
             else:
                 response.raise_for_status()
+                logger.info(
+                    "OpenRouter %s: resposta OK, total %.1fs (%d tentativa(s))",
+                    model,
+                    time.monotonic() - call_start,
+                    attempt + 1,
+                )
                 yield {"type": "response", "response": response}
                 return
 
         if attempt == MAX_RETRIES:
+            logger.warning(
+                "OpenRouter %s: desistindo após %.1fs (%d tentativa(s)): %s",
+                model,
+                time.monotonic() - call_start,
+                attempt + 1,
+                last_exc,
+            )
             raise last_exc
 
         delay = _retry_delay(attempt, last_exc)

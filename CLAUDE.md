@@ -162,7 +162,10 @@ and structuring collapsed into one step:
    a direct `requests.post` call, which retries transient failures (HTTP 429, any 5xx, or a
    network-level `requests.exceptions.RequestException`) up to `MAX_RETRIES` (3) times with exponential
    backoff plus jitter, honoring a `Retry-After` response header when present; non-transient errors
-   (400/401/etc.) propagate immediately without retrying. `_split_csv_and_notes` then splits the
+   (400/401/etc.) propagate immediately without retrying. `structure`/`_post_with_retry` log (at
+   `INFO`) the page count and payload size sent, each attempt's HTTP status and wall-clock time, and
+   the total call duration — `docker compose logs server` is how you tell whether a slow OCR run is
+   the OpenRouter call itself vs. retries vs. upload/render. `_split_csv_and_notes` then splits the
    model's free-text reply into the CSV block and the "pontos de atenção" list by looking for the
    model's own "Pontos de atenção" section header — this parsing is coupled to the output format
    `prompt-to-OCR` asks the model to produce, so if that prompt's `SAÍDA` section changes, this parser

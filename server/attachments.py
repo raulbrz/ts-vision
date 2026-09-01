@@ -2,7 +2,7 @@ import base64
 
 import pymupdf
 
-PDF_RENDER_DPI = 200
+PDF_RENDER_DPI = 150
 
 
 def to_image_parts(file_bytes: bytes, filename: str) -> list:
