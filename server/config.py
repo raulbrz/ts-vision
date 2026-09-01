@@ -21,6 +21,7 @@ OPENROUTER_MODEL_OPTIONS = list(
             "google/gemma-4-26b-a4b-it:free",
             "google/gemma-4-26b-a4b-it",
             "google/gemini-2.5-flash-lite",
+            "xiaomi/mimo-v2.5"
             "deepseek/deepseek-v4-flash-vision-exp",
         ]
     )
