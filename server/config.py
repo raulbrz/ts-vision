@@ -24,6 +24,7 @@ OPENROUTER_MODEL_OPTIONS = list(
             "xiaomi/mimo-v2.5",
             "deepseek/deepseek-v4-flash-vision-exp",
             "z-ai/glm-5.3-flash",
+            "openai/gpt-5.4-nano",
         ]
     )
 )
