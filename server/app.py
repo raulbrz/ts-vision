@@ -237,8 +237,14 @@ def ocr_endpoint():
         csv_text = None
         llm_notes = []
         try:
-            for progress in llm.structure(file_attachments, date_start, date_end, PROMPT_TEMPLATE):
-                if progress["type"] == "retry":
+            for progress in llm.structure_with_heartbeat(
+                file_attachments, date_start, date_end, PROMPT_TEMPLATE
+            ):
+                if progress["type"] == "heartbeat":
+                    # Byte no fio para manter o stream vivo enquanto o LLM responde;
+                    # o frontend ignora linhas em branco.
+                    yield "\n"
+                elif progress["type"] == "retry":
                     yield _event(
                         "llm_retentando",
                         f"Chamada à IA falhou ({progress['error']}). Tentativa "

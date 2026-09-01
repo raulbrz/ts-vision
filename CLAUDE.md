@@ -119,7 +119,16 @@ it streams newline-delimited JSON (`application/x-ndjson`, via
 `Response(stream_with_context(generate()), ...)`): each `_event(stage, message, **extra)` call yields
 one line as the pipeline progresses through `recebido` → per-file `preparando`/`preparado`/
 `preparo_falhou` → `llm_processando` → a terminal `concluido` (carrying `csv` and `notes`) or `erro`
-event. This lets the frontend show live per-file status instead of a single opaque spinner. There used
+event. This lets the frontend show live per-file status instead of a single opaque spinner. The
+OpenRouter call itself emits no events while it blocks (can be minutes on a big timesheet), so the
+`llm_processando` loop iterates `llm.structure_with_heartbeat` — which runs the real call on a daemon
+thread and surfaces a `heartbeat` progress item every `llm.HEARTBEAT_INTERVAL_SECONDS` (15s) it's
+still waiting — and `app.py` turns each `heartbeat` into a bare `"\n"` on the wire. That keeps bytes
+flowing so idle-timeout proxies in front of the app (Cloudflare's non-configurable ~100s 524, an
+NPM/nginx `proxy_read_timeout`) don't sever the response mid-stream; the frontend already skips blank
+lines when splitting the NDJSON, so the `"\n"` is invisible to it. Symptom this fixed: a prod-only
+`TypeError: network error` in `app.js`'s OCR fetch (a cut *response* stream, not a failed connect),
+seen ~60–100s into a large-timesheet run. There used
 to be a separate Google Cloud Vision OCR step before the LLM call; it was removed because Vision's
 `full_text_annotation.text` flattens the page into reading-order text and throws away the row/column
 layout, which then had to be blindly reconstructed by the LLM from a linear string — a bad fit for a

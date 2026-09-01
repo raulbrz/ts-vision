@@ -41,6 +41,16 @@ Estes afetam diretamente a qualidade dos dados extraídos, que é o propósito d
 
 ## Média prioridade — usabilidade
 
+- [x] **Stream do `/api/ocr` morre em produção durante a chamada ao LLM (`network error`).** A chamada
+  ao OpenRouter (`llm._post_with_retry`, `requests.post` bloqueante) não emitia nenhum byte enquanto o
+  modelo respondia; num timesheet grande isso passa dos ~60–100s e um proxy da frente (524 do
+  Cloudflare, `proxy_read_timeout` do NPM/nginx — o `deploy/nginx.conf` interno já tem 600s, os de
+  fora não) cortava a resposta no meio, e o Chrome mostrava isso como `TypeError: network error` no
+  fetch do `web/app.js`. Resolvido: `llm.structure_with_heartbeat` roda a chamada real numa thread
+  daemon e emite um item `heartbeat` a cada 15s de espera; `app.py` converte cada um num `"\n"` no
+  fio, que o frontend ignora ao fatiar o NDJSON. Mitigação secundária (infra, não código): subir o
+  `proxy_read_timeout` para 600s no proxy host do NPM.
+
 - [x] **Não há como exportar o CSV gerado.** O resultado só é renderizado como tabela HTML; falta um
   botão para baixar o `.csv`. Resolvido: botão "Baixar CSV" no cabeçalho do resultado (`web/index.html`)
   gera um `Blob` com o texto CSV recebido no evento `concluido` (guardado em `lastCsvText`,

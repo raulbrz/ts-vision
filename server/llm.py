@@ -1,6 +1,8 @@
 import logging
+import queue
 import random
 import re
+import threading
 import time
 
 import requests
@@ -12,6 +14,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 MAX_RETRIES = 3
 BACKOFF_BASE_SECONDS = 1
+
+HEARTBEAT_INTERVAL_SECONDS = 15
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +83,48 @@ def structure(
 
     content = response.json()["choices"][0]["message"]["content"]
     yield {"type": "result", "result": _split_csv_and_notes(content)}
+
+
+def structure_with_heartbeat(
+    attachments: dict,
+    date_start: str,
+    date_end: str,
+    prompt_template: str,
+    interval: float = HEARTBEAT_INTERVAL_SECONDS,
+):
+    """Same events as `structure`, plus a `{"type": "heartbeat"}` every `interval`
+    seconds while the (blocking) OpenRouter call is in flight. A streaming HTTP
+    caller turns each heartbeat into a byte on the wire so idle-timeout proxies
+    (Cloudflare's 524, nginx `proxy_read_timeout`) don't sever the response while
+    the model is still thinking. The real call runs on a daemon thread; if the
+    client disconnects it keeps running until `requests` times out, then exits."""
+    results: "queue.Queue" = queue.Queue()
+
+    def worker():
+        try:
+            for progress in structure(
+                attachments, date_start, date_end, prompt_template
+            ):
+                results.put(("item", progress))
+        except Exception as exc:  # re-raised on the consumer thread
+            results.put(("error", exc))
+        finally:
+            results.put(("done", None))
+
+    threading.Thread(target=worker, daemon=True).start()
+
+    while True:
+        try:
+            kind, payload = results.get(timeout=interval)
+        except queue.Empty:
+            yield {"type": "heartbeat"}
+            continue
+        if kind == "item":
+            yield payload
+        elif kind == "error":
+            raise payload
+        else:
+            return
 
 
 def _post_with_retry(payload: dict):
