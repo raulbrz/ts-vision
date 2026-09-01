@@ -23,6 +23,7 @@ OPENROUTER_MODEL_OPTIONS = list(
             "google/gemini-2.5-flash-lite",
             "xiaomi/mimo-v2.5",
             "deepseek/deepseek-v4-flash-vision-exp",
+            "z-ai/glm-5.3-flash",
         ]
     )
 )
