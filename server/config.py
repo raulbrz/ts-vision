@@ -25,6 +25,8 @@ OPENROUTER_MODEL_OPTIONS = list(
             "deepseek/deepseek-v4-flash-vision-exp",
             "z-ai/glm-5.3-flash",
             "openai/gpt-5.4-nano",
+            "openai/gpt-5.6-luna",
+            "tencent/hy4-preview",
         ]
     )
 )
